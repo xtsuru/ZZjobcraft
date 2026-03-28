@@ -3,32 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D 마인크래프트 - 블록 설치 및 파괴</title>
+    <title>3D Minecraft - 확장된 블록 시스템</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87ceeb; }
         #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 15px; height: 15px;
-            border: 2px solid white;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; top: 50%; left: 50%; width: 15px; height: 15px;
+            border: 2px solid white; transform: translate(-50%, -50%);
+            pointer-events: none; z-index: 10;
         }
         #ui {
-            position: absolute; top: 20px; left: 20px;
+            position: absolute; top: 10px; left: 10px; bottom: 10px;
             color: white; font-family: 'Malgun Gothic', sans-serif;
-            background: rgba(0,0,0,0.7); padding: 15px;
-            border-radius: 8px; pointer-events: none;
+            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
+            overflow-y: auto; width: 220px;
+        }
+        .inv-item { 
+            margin-top: 4px; padding: 5px; border-radius: 4px;
+            font-size: 0.9em; border: 1px solid transparent;
+        }
+        .active { 
+            background: rgba(0, 255, 0, 0.2); 
+            border: 1px solid #00ff00; color: #00ff00; 
+        }
+        .category { 
+            margin-top: 15px; color: #ffeb3b; font-weight: bold; 
+            border-bottom: 1px solid #555; padding-bottom: 3px;
         }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
     <div id="ui">
-        <b>조작법 업데이트</b><br>
-        - 좌클릭: 블록 파괴<br>
-        - 우클릭: 블록 설치<br>
-        - W,A,S,D: 이동 | SPACE: 점프
+        <div style="font-weight: bold; font-size: 1.1em; margin-bottom: 10px;">⛏️ 인벤토리</div>
+        <div id="inventory-list"></div>
     </div>
 
     <script type="importmap">
@@ -44,12 +51,58 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // 1. 기본 설정
+        // --- [설정 데이터: 모든 블록 종류] ---
+        const BLOCK_DATA = {
+            // 1. 자연 블록
+            "grass":      { name: "잔디 블록", color: 0x7cfc00, cat: "자연", key: "1" },
+            "dirt":       { name: "흙", color: 0x5d4037, cat: "자연", key: "2" },
+            "stone":      { name: "돌", color: 0x808080, cat: "자연", key: "3" },
+            "sand":       { name: "모래", color: 0xd2b48c, cat: "자연", key: "4" },
+            "deepslate":  { name: "심층암", color: 0x3d3d3d, cat: "자연", key: "5" },
+            // 2. 나무 블록
+            "log":        { name: "원목", color: 0x4b3621, cat: "나무", key: "6" },
+            "leaves":     { name: "나뭇잎", color: 0x228b22, cat: "나무", key: "7" },
+            // 3. 광석 블록
+            "coal":       { name: "석탄 광석", color: 0x2c2c2c, cat: "광석", key: "8" },
+            "iron":       { name: "철 광석", color: 0xd8d8d8, cat: "광석", key: "9" },
+            "diamond":    { name: "다이아몬드", color: 0x00ffff, cat: "광석", key: "0" }
+        };
+
+        // --- 상태 관리 ---
+        let inventory = {};
+        let selectedBlockType = "grass";
+        Object.keys(BLOCK_DATA).forEach(type => inventory[type] = 10); // 테스트용 초기 개수
+
+        function updateUI() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            let lastCat = "";
+            
+            Object.keys(BLOCK_DATA).forEach(type => {
+                const data = BLOCK_DATA[type];
+                if(data.cat !== lastCat) {
+                    const catDiv = document.createElement('div');
+                    catDiv.className = 'category';
+                    catDiv.innerText = data.cat;
+                    list.appendChild(catDiv);
+                    lastCat = data.cat;
+                }
+                const div = document.createElement('div');
+                div.className = `inv-item ${selectedBlockType === type ? 'active' : ''}`;
+                div.innerText = `[${data.key}] ${data.name}: ${inventory[type]}`;
+                list.appendChild(div);
+            });
+        }
+        updateUI();
+
+        // --- Three.js 엔진 설정 ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0x87ceeb, 10, 60);
+        scene.fog = new THREE.Fog(0x87ceeb, 20, 100);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 10);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -57,94 +110,97 @@
         const controls = new PointerLockControls(camera, document.body);
         document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); });
 
-        // 2. 조명
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const dLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        dLight.position.set(10, 20, 10);
-        scene.add(dLight);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+        sun.position.set(5, 20, 10);
+        scene.add(sun);
 
-        // 3. 재질 및 지형 데이터
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-        const grassMat = new THREE.MeshLambertMaterial({ color: 0x7cfc00 }); 
-        const dirtMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
-        
-        const blocks = []; // 충돌 및 상호작용용 블록 배열
+        const blocks = [];
 
-        function createBlock(x, y, z, mat) {
+        function createBlock(x, y, z, type) {
+            const mat = new THREE.MeshLambertMaterial({ color: BLOCK_DATA[type].color });
             const block = new THREE.Mesh(boxGeo, mat);
             block.position.set(x, y, z);
+            block.name = type;
             scene.add(block);
             blocks.push(block);
         }
 
-        // 초기 맵 생성
-        for (let x = -10; x < 10; x++) {
-            for (let z = -10; z < 10; z++) {
-                createBlock(x, 0, z, grassMat);
-                createBlock(x, -1, z, dirtMat);
+        // --- 지형 생성 (층별 배치) ---
+        const range = 12;
+        for (let x = -range; x <= range; x++) {
+            for (let z = -range; z <= range; z++) {
+                createBlock(x, 0, z, 'grass');      // 표면: 잔디
+                createBlock(x, -1, z, 'dirt');      // 지하1: 흙
+                createBlock(x, -2, z, 'stone');     // 지하2: 돌
+                createBlock(x, -3, z, 'deepslate'); // 지하3: 심층암
+                
+                // 가끔 광석 배치 (랜덤)
+                if(Math.random() > 0.95) createBlock(x, -2, z, 'coal');
+                if(Math.random() > 0.98) createBlock(x, -3, z, 'iron');
             }
         }
 
-        // 4. 블록 파괴 및 설치 로직 (Raycaster)
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2(0, 0); // 화면 중앙 고정
-
+        // --- 상호작용 ---
         window.addEventListener('mousedown', (e) => {
             if (!controls.isLocked) return;
-
-            raycaster.setFromCamera(mouse, camera);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const intersects = raycaster.intersectObjects(blocks);
 
             if (intersects.length > 0) {
                 const intersect = intersects[0];
-                
-                if (e.button === 0) { // 좌클릭: 파괴
+                if (e.button === 0) { // 파괴
+                    inventory[intersect.object.name]++;
                     scene.remove(intersect.object);
                     blocks.splice(blocks.indexOf(intersect.object), 1);
                 } 
-                else if (e.button === 2) { // 우클릭: 설치
-                    const pos = intersect.object.position.clone();
-                    // 클릭한 면의 방향(normal)으로 한 칸 이동한 위치에 설치
-                    pos.add(intersect.face.normal); 
-                    createBlock(pos.x, pos.y, pos.z, grassMat);
+                else if (e.button === 2) { // 설치
+                    if (inventory[selectedBlockType] > 0) {
+                        const pos = intersect.object.position.clone().add(intersect.face.normal);
+                        createBlock(pos.x, pos.y, pos.z, selectedBlockType);
+                        inventory[selectedBlockType]--;
+                    }
                 }
+                updateUI();
             }
         });
 
-        // 우클릭 메뉴 방지
-        window.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', (e) => {
+            // 숫자키 매핑
+            Object.keys(BLOCK_DATA).forEach(type => {
+                if (e.key === BLOCK_DATA[type].key) {
+                    selectedBlockType = type;
+                    updateUI();
+                }
+            });
+            // 이동 및 점프
+            if (e.code === 'KeyW') moveForward = true;
+            if (e.code === 'KeyA') moveLeft = true;
+            if (e.code === 'KeyS') moveBackward = true;
+            if (e.code === 'KeyD') moveRight = true;
+            if (e.code === 'Space' && canJump) { velocity.y += 8; canJump = false; }
+        });
 
-        // 5. 플레이어 물리 및 이동
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW') moveForward = false;
+            if (e.code === 'KeyA') moveLeft = false;
+            if (e.code === 'KeyS') moveBackward = false;
+            if (e.code === 'KeyD') moveRight = false;
+        });
+
+        // --- 물리 및 애니메이션 ---
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
-
-        document.addEventListener('keydown', (e) => {
-            switch (e.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyD': moveRight = true; break;
-                case 'Space': if (canJump) velocity.y += 8; canJump = false; break;
-            }
-        });
-        document.addEventListener('keyup', (e) => {
-            switch (e.code) {
-                case 'KeyW': moveForward = false; break;
-                case 'KeyA': moveLeft = false; break;
-                case 'KeyS': moveBackward = false; break;
-                case 'KeyD': moveRight = false; break;
-            }
-        });
-
         let prevTime = performance.now();
+
         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
-            
             if (controls.isLocked) {
                 const delta = (time - prevTime) / 1000;
-
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
                 velocity.y -= 9.8 * 2.2 * delta; 
@@ -153,45 +209,31 @@
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize();
 
-                const speed = 80.0;
-                if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+                if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta;
 
                 controls.moveRight(-velocity.x * delta);
                 controls.moveForward(-velocity.z * delta);
                 camera.position.y += (velocity.y * delta);
 
-                // 바닥 충돌 감지 (모든 블록 대상)
+                // 간단한 바닥 충돌
                 canJump = false;
-                const pX = Math.round(camera.position.x);
-                const pZ = Math.round(camera.position.z);
-                
-                // 현재 내 발밑(y축 아래)에 있는 블록들 중 가장 높은 위치 찾기
+                const pX = Math.round(camera.position.x), pZ = Math.round(camera.position.z);
                 let highestY = -Infinity;
                 for(let b of blocks) {
                     if(Math.round(b.position.x) === pX && Math.round(b.position.z) === pZ) {
                         if(b.position.y > highestY) highestY = b.position.y;
                     }
                 }
-
-                const groundLevel = (highestY === -Infinity ? -10 : highestY) + 0.5 + 1.6;
-
+                const groundLevel = (highestY === -Infinity ? -10 : highestY) + 2.1;
                 if (camera.position.y <= groundLevel) {
-                    velocity.y = 0;
-                    camera.position.y = groundLevel;
-                    canJump = true;
+                    velocity.y = 0; camera.position.y = groundLevel; canJump = true;
                 }
             }
             prevTime = time;
             renderer.render(scene, camera);
         }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
+        window.addEventListener('contextmenu', e => e.preventDefault());
         animate();
     </script>
 </body>
