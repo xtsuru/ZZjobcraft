@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Minecraft - 충돌/이동 수정본</title>
+    <title>3D Minecraft - 하이라이트 포함 완성본</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87ceeb; }
         #crosshair {
@@ -364,7 +364,6 @@
 
                 if (!overlapX || !overlapZ) continue;
 
-                // 플레이어 발 아래 또는 거의 같은 높이의 블록만 바닥 후보
                 if (bb.maxY <= pBox.minY + 0.2) {
                     if (bb.maxY > bestTop) bestTop = bb.maxY;
                 }
@@ -396,7 +395,6 @@
         }
 
         function tryMoveAxis(dx, dz) {
-            // X축
             if (dx !== 0) {
                 const next = camera.position.clone();
                 next.x += dx;
@@ -415,7 +413,6 @@
                 }
             }
 
-            // Z축
             if (dz !== 0) {
                 const next = camera.position.clone();
                 next.z += dz;
@@ -438,7 +435,6 @@
         function resolveVertical(delta) {
             camera.position.y += velocity.y * delta;
 
-            // 천장 충돌
             if (velocity.y > 0) {
                 const ceiling = getCeilingY(camera.position);
                 if (ceiling < Infinity) {
@@ -451,7 +447,6 @@
                 }
             }
 
-            // 바닥 충돌
             const floorY = getFloorY(camera.position);
             canJump = false;
 
@@ -467,12 +462,40 @@
         }
 
         // =========================
+        // 블록 하이라이트
+        // =========================
+        const highlightGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+        const highlightMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true
+        });
+        const highlight = new THREE.Mesh(highlightGeo, highlightMat);
+        highlight.visible = false;
+        scene.add(highlight);
+
+        const raycaster = new THREE.Raycaster();
+
+        function updateBlockHighlight() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            raycaster.far = 8;
+
+            const intersects = raycaster.intersectObjects(blocks);
+
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                highlight.position.copy(target.position);
+                highlight.visible = true;
+            } else {
+                highlight.visible = false;
+            }
+        }
+
+        // =========================
         // 상호작용
         // =========================
         window.addEventListener('mousedown', (e) => {
             if (!controls.isLocked) return;
 
-            const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             raycaster.far = 8;
 
@@ -559,14 +582,11 @@
             const delta = Math.min((time - prevTime) / 1000, 0.05);
 
             if (controls.isLocked) {
-                // 마찰
                 velocity.x *= Math.max(0, 1 - 10 * delta);
                 velocity.z *= Math.max(0, 1 - 10 * delta);
 
-                // 중력
                 velocity.y -= 24 * delta;
 
-                // 카메라 기준 이동 방향 계산
                 camera.getWorldDirection(forward);
                 forward.y = 0;
                 forward.normalize();
@@ -594,18 +614,16 @@
                     velocity.z *= scale;
                 }
 
-                // 수평 이동
                 tryMoveAxis(velocity.x * delta, velocity.z * delta);
-
-                // 수직 이동
                 resolveVertical(delta);
 
-                // 낙사 복구
                 if (camera.position.y < -30) {
                     camera.position.set(0, 15, 15);
                     velocity.set(0, 0, 0);
                 }
             }
+
+            updateBlockHighlight();
 
             prevTime = time;
             renderer.render(scene, camera);
