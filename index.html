@@ -1,393 +1,167 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Style Lobby</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      image-rendering: pixelated;
-    }
+<meta charset="UTF-8">
+<title>Minecraft Web</title>
 
-    body {
-      margin: 0;
-      font-family: monospace, "Malgun Gothic", sans-serif;
-      background: linear-gradient(to bottom, #7ec0ee 0%, #9bd0ff 45%, #7bc96f 46%, #5ea84a 100%);
-      min-height: 100vh;
-      overflow: hidden;
-      color: white;
-    }
+<style>
+body { margin:0; overflow:hidden; font-family: monospace; }
 
-    .screen {
-      position: relative;
-      width: 100%;
-      height: 100vh;
-    }
+/* ===== 로비 ===== */
+#lobby {
+  position:absolute;
+  width:100%;
+  height:100%;
+  background: linear-gradient(#7ec0ee, #7bc96f);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  z-index:10;
+}
 
-    .title-wrap {
-      position: absolute;
-      top: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      user-select: none;
-    }
+.title {
+  font-size:70px;
+  font-weight:bold;
+  margin-bottom:50px;
+}
 
-    .title {
-      font-size: 86px;
-      line-height: 0.9;
-      font-weight: 900;
-      letter-spacing: 2px;
-      color: #d9d3d0;
-      text-shadow:
-        0 6px 0 #4b4747,
-        0 0 0 #000,
-        -4px -4px 0 #000,
-        4px -4px 0 #000,
-        -4px 4px 0 #000,
-        4px 4px 0 #000,
-        0 -4px 0 #000,
-        0 4px 0 #000,
-        -4px 0 0 #000,
-        4px 0 0 #000;
-      white-space: nowrap;
-    }
+.mc-btn {
+  width:300px;
+  padding:15px;
+  margin:10px;
+  font-size:20px;
+  background:#9a9a9a;
+  border:4px solid #000;
+  cursor:pointer;
+}
 
-    .subtitle {
-      margin-top: 8px;
-      font-size: 34px;
-      font-weight: 800;
-      color: #d9d3d0;
-      text-shadow:
-        -3px -3px 0 #000,
-        3px -3px 0 #000,
-        -3px 3px 0 #000,
-        3px 3px 0 #000,
-        0 3px 0 #000;
-    }
+.mc-btn:hover { background:#bcbcbc; }
 
-    .splash {
-      position: absolute;
-      right: -120px;
-      top: 40px;
-      transform: rotate(-18deg);
-      font-size: 28px;
-      font-weight: 900;
-      color: #ffe600;
-      text-shadow:
-        -2px -2px 0 #4c4c00,
-        2px -2px 0 #4c4c00,
-        -2px 2px 0 #4c4c00,
-        2px 2px 0 #4c4c00;
-      white-space: nowrap;
-    }
-
-    .menu {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -42%);
-      width: 760px;
-      max-width: calc(100% - 40px);
-    }
-
-    .menu-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .menu-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
-      margin-top: 22px;
-    }
-
-    .mc-btn {
-      width: 100%;
-      height: 72px;
-      border: 4px solid #1b1b1b;
-      background: linear-gradient(to bottom, #bdbdbd 0%, #a9a9a9 49%, #8d8d8d 50%, #9a9a9a 100%);
-      color: #f2f2f2;
-      font-size: 26px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow:
-        inset 0 2px 0 rgba(255,255,255,0.35),
-        inset 0 -3px 0 rgba(0,0,0,0.25),
-        0 4px 0 rgba(0,0,0,0.3);
-      transition: transform 0.05s ease, filter 0.08s ease;
-    }
-
-    .mc-btn:hover {
-      filter: brightness(1.08);
-    }
-
-    .mc-btn:active {
-      transform: translateY(2px);
-      box-shadow:
-        inset 0 2px 0 rgba(255,255,255,0.25),
-        inset 0 -1px 0 rgba(0,0,0,0.2),
-        0 2px 0 rgba(0,0,0,0.3);
-    }
-
-    .mc-btn.realms {
-      position: relative;
-      padding-right: 80px;
-    }
-
-    .mc-btn.realms::after {
-      content: "◆";
-      position: absolute;
-      right: 26px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #1de9b6;
-      font-size: 30px;
-      text-shadow: 0 0 4px rgba(0,0,0,0.4);
-    }
-
-    .bottom-left,
-    .bottom-right {
-      position: absolute;
-      bottom: 16px;
-      font-size: 18px;
-      font-weight: 700;
-      text-shadow:
-        -2px -2px 0 rgba(0,0,0,0.6),
-        2px -2px 0 rgba(0,0,0,0.6),
-        -2px 2px 0 rgba(0,0,0,0.6),
-        2px 2px 0 rgba(0,0,0,0.6);
-    }
-
-    .bottom-left {
-      left: 16px;
-    }
-
-    .bottom-right {
-      right: 16px;
-    }
-
-    .panel {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.55);
-      z-index: 20;
-    }
-
-    .panel.show {
-      display: flex;
-    }
-
-    .dialog {
-      width: 560px;
-      max-width: calc(100% - 24px);
-      background: #2e2e2e;
-      border: 4px solid #111;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      padding: 22px;
-    }
-
-    .dialog-title {
-      font-size: 28px;
-      font-weight: 800;
-      margin-bottom: 14px;
-    }
-
-    .dialog-text {
-      font-size: 18px;
-      line-height: 1.5;
-      color: #e6e6e6;
-      margin-bottom: 18px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-    }
-
-    .small-btn {
-      height: 56px;
-      font-size: 20px;
-    }
-
-    @media (max-width: 900px) {
-      .title {
-        font-size: 58px;
-      }
-
-      .subtitle {
-        font-size: 24px;
-      }
-
-      .splash {
-        font-size: 18px;
-        right: -70px;
-        top: 28px;
-      }
-
-      .menu {
-        width: calc(100% - 24px);
-        transform: translate(-50%, -36%);
-      }
-
-      .mc-btn {
-        height: 64px;
-        font-size: 22px;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .menu-row {
-        grid-template-columns: 1fr;
-      }
-
-      .title {
-        font-size: 42px;
-      }
-
-      .subtitle {
-        font-size: 18px;
-      }
-
-      .splash {
-        display: none;
-      }
-    }
-  </style>
+/* ===== 게임 ===== */
+#gameCanvas {
+  display:none;
+}
+</style>
 </head>
+
 <body>
-  <div class="screen">
-    <div class="title-wrap">
-      <div class="title">MINECRAFT</div>
-      <div class="subtitle">JAVA EDITION</div>
-      <div class="splash">Survival Time!</div>
-    </div>
 
-    <div class="menu">
-      <div class="menu-stack">
-        <button class="mc-btn" id="singleBtn">싱글플레이</button>
-        <button class="mc-btn" id="multiBtn">멀티플레이</button>
-        <button class="mc-btn realms" id="realmsBtn">Minecraft Realms</button>
+<!-- ===== 로비 ===== -->
+<div id="lobby">
+  <div class="title">MINECRAFT</div>
+  <button class="mc-btn" id="startBtn">싱글플레이</button>
+</div>
 
-        <div class="menu-row">
-          <button class="mc-btn" id="settingsBtn">설정...</button>
-          <button class="mc-btn" id="quitBtn">게임 종료</button>
-        </div>
-      </div>
-    </div>
+<!-- ===== 게임 ===== -->
+<canvas id="gameCanvas"></canvas>
 
-    <div class="bottom-left">Minecraft 26.1</div>
-    <div class="bottom-right">Copyright Mojang AB. 재배포하지 마세요!</div>
+<script type="module">
 
-    <div class="panel" id="modal">
-      <div class="dialog">
-        <div class="dialog-title" id="modalTitle">안내</div>
-        <div class="dialog-text" id="modalText">내용</div>
-        <div class="dialog-actions">
-          <button class="mc-btn small-btn" id="confirmBtn">확인</button>
-          <button class="mc-btn small-btn" id="cancelBtn">닫기</button>
-        </div>
-      </div>
-    </div>
-  </div>
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158/build/three.module.js";
 
-  <script>
-    const modal = document.getElementById('modal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalText = document.getElementById('modalText');
-    const confirmBtn = document.getElementById('confirmBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
+// ===== 버튼 클릭 =====
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("lobby").style.display = "none";
+  document.getElementById("gameCanvas").style.display = "block";
+  startGame();
+};
 
-    let confirmAction = null;
+// ===== 게임 시작 =====
+function startGame(){
 
-    function openModal(title, text, onConfirm = null) {
-      modalTitle.textContent = title;
-      modalText.textContent = text;
-      confirmAction = onConfirm;
-      modal.classList.add('show');
+  const canvas = document.getElementById("gameCanvas");
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+  const renderer = new THREE.WebGLRenderer({canvas});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // ===== 조명 =====
+  const light = new THREE.DirectionalLight(0xffffff,1);
+  light.position.set(5,10,5);
+  scene.add(light);
+
+  // ===== 바닥 =====
+  const geo = new THREE.BoxGeometry(1,1,1);
+  const mat = new THREE.MeshStandardMaterial({color:0x00ff00});
+
+  for(let x=-10;x<10;x++){
+    for(let z=-10;z<10;z++){
+      const cube = new THREE.Mesh(geo,mat);
+      cube.position.set(x,0,z);
+      scene.add(cube);
+    }
+  }
+
+  // ===== 플레이어 =====
+  camera.position.set(0,2,5);
+
+  let velocityY = 0;
+  let onGround = false;
+
+  const keys = {};
+
+  document.addEventListener("keydown", e => keys[e.key]=true);
+  document.addEventListener("keyup", e => keys[e.key]=false);
+
+  document.body.requestPointerLock();
+
+  let rotY = 0;
+  let rotX = 0;
+
+  document.addEventListener("mousemove", e=>{
+    if(document.pointerLockElement){
+      rotY -= e.movementX * 0.002;
+      rotX -= e.movementY * 0.002;
+      rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotX));
+    }
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+
+    // 방향 벡터
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0));
+
+    // 이동
+    if(keys["w"]) camera.position.addScaledVector(dir, 0.1);
+    if(keys["s"]) camera.position.addScaledVector(dir, -0.1);
+    if(keys["a"]) camera.position.addScaledVector(right, -0.1);
+    if(keys["d"]) camera.position.addScaledVector(right, 0.1);
+
+    // 점프
+    if(keys[" "] && onGround){
+      velocityY = 0.2;
+      onGround = false;
     }
 
-    function closeModal() {
-      modal.classList.remove('show');
-      confirmAction = null;
+    velocityY -= 0.01;
+    camera.position.y += velocityY;
+
+    // 바닥 충돌
+    if(camera.position.y < 2){
+      camera.position.y = 2;
+      velocityY = 0;
+      onGround = true;
     }
 
-    confirmBtn.addEventListener('click', () => {
-      if (confirmAction) confirmAction();
-      closeModal();
-    });
+    // 회전 적용
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = rotY;
+    camera.rotation.x = rotX;
 
-    cancelBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal();
-    });
+    renderer.render(scene, camera);
+  }
 
-    document.getElementById('singleBtn').addEventListener('click', () => {
-      openModal(
-        '싱글플레이',
-        '싱글플레이를 시작한다. 여기서 나중에 게임 화면(index.html)으로 연결하면 된다.',
-        () => {
-          // 예시 1: 같은 폴더의 게임 파일로 이동
-          // location.href = './game.html';
+  animate();
+}
 
-          // 예시 2: 지금은 테스트용
-          alert('싱글플레이 시작');
-        }
-      );
-    });
+</script>
 
-    document.getElementById('multiBtn').addEventListener('click', () => {
-      openModal(
-        '멀티플레이',
-        '멀티플레이 서버 목록 화면으로 연결할 수 있다.',
-        () => {
-          alert('멀티플레이 메뉴 열기');
-        }
-      );
-    });
-
-    document.getElementById('realmsBtn').addEventListener('click', () => {
-      openModal(
-        'Minecraft Realms',
-        'Realms 연결 기능은 나중에 붙이면 된다.',
-        () => {
-          alert('Realms 메뉴 열기');
-        }
-      );
-    });
-
-    document.getElementById('settingsBtn').addEventListener('click', () => {
-      openModal(
-        '설정',
-        '사운드, 마우스 감도, 그래픽, 언어 설정 같은 메뉴를 여기에 연결하면 된다.',
-        () => {
-          alert('설정 메뉴 열기');
-        }
-      );
-    });
-
-    document.getElementById('quitBtn').addEventListener('click', () => {
-      openModal(
-        '게임 종료',
-        '정말 종료할까?',
-        () => {
-          // 브라우저에서는 window.close()가 대부분 막혀서 안내만 띄움
-          alert('브라우저 탭을 닫거나 이전 화면으로 이동하도록 처리하면 된다.');
-        }
-      );
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.classList.contains('show')) {
-        closeModal();
-      }
-    });
-  </script>
 </body>
 </html>
