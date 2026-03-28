@@ -1,167 +1,1044 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>Minecraft Web</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minecraft Web - Lobby + Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            image-rendering: pixelated;
+        }
 
-<style>
-body { margin:0; overflow:hidden; font-family: monospace; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: monospace, "Malgun Gothic", sans-serif;
+            background: #000;
+        }
 
-/* ===== 로비 ===== */
-#lobby {
-  position:absolute;
-  width:100%;
-  height:100%;
-  background: linear-gradient(#7ec0ee, #7bc96f);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  z-index:10;
-}
+        canvas {
+            display: block;
+        }
 
-.title {
-  font-size:70px;
-  font-weight:bold;
-  margin-bottom:50px;
-}
+        /* =========================
+           로비
+        ========================= */
+        #lobby {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(to bottom, #7ec0ee 0%, #9bd0ff 45%, #7bc96f 46%, #5ea84a 100%);
+            z-index: 100;
+            color: white;
+        }
 
-.mc-btn {
-  width:300px;
-  padding:15px;
-  margin:10px;
-  font-size:20px;
-  background:#9a9a9a;
-  border:4px solid #000;
-  cursor:pointer;
-}
+        .lobby-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
 
-.mc-btn:hover { background:#bcbcbc; }
+        .title-wrap {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            user-select: none;
+        }
 
-/* ===== 게임 ===== */
-#gameCanvas {
-  display:none;
-}
-</style>
+        .title {
+            font-size: 86px;
+            line-height: 0.9;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: #d9d3d0;
+            text-shadow:
+                0 6px 0 #4b4747,
+                -4px -4px 0 #000,
+                4px -4px 0 #000,
+                -4px 4px 0 #000,
+                4px 4px 0 #000,
+                0 -4px 0 #000,
+                0 4px 0 #000,
+                -4px 0 0 #000,
+                4px 0 0 #000;
+            white-space: nowrap;
+        }
+
+        .subtitle {
+            margin-top: 8px;
+            font-size: 34px;
+            font-weight: 800;
+            color: #d9d3d0;
+            text-shadow:
+                -3px -3px 0 #000,
+                3px -3px 0 #000,
+                -3px 3px 0 #000,
+                3px 3px 0 #000,
+                0 3px 0 #000;
+        }
+
+        .splash {
+            position: absolute;
+            right: -120px;
+            top: 40px;
+            transform: rotate(-18deg);
+            font-size: 28px;
+            font-weight: 900;
+            color: #ffe600;
+            text-shadow:
+                -2px -2px 0 #4c4c00,
+                2px -2px 0 #4c4c00,
+                -2px 2px 0 #4c4c00,
+                2px 2px 0 #4c4c00;
+            white-space: nowrap;
+        }
+
+        .menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -42%);
+            width: 760px;
+            max-width: calc(100% - 40px);
+        }
+
+        .menu-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .menu-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 22px;
+        }
+
+        .mc-btn {
+            width: 100%;
+            height: 72px;
+            border: 4px solid #1b1b1b;
+            background: linear-gradient(to bottom, #bdbdbd 0%, #a9a9a9 49%, #8d8d8d 50%, #9a9a9a 100%);
+            color: #f2f2f2;
+            font-size: 26px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow:
+                inset 0 2px 0 rgba(255,255,255,0.35),
+                inset 0 -3px 0 rgba(0,0,0,0.25),
+                0 4px 0 rgba(0,0,0,0.3);
+            transition: transform 0.05s ease, filter 0.08s ease;
+        }
+
+        .mc-btn:hover {
+            filter: brightness(1.08);
+        }
+
+        .mc-btn:active {
+            transform: translateY(2px);
+            box-shadow:
+                inset 0 2px 0 rgba(255,255,255,0.25),
+                inset 0 -1px 0 rgba(0,0,0,0.2),
+                0 2px 0 rgba(0,0,0,0.3);
+        }
+
+        .mc-btn.realms {
+            position: relative;
+            padding-right: 80px;
+        }
+
+        .mc-btn.realms::after {
+            content: "◆";
+            position: absolute;
+            right: 26px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #1de9b6;
+            font-size: 30px;
+        }
+
+        .bottom-left,
+        .bottom-right {
+            position: absolute;
+            bottom: 16px;
+            font-size: 18px;
+            font-weight: 700;
+            text-shadow:
+                -2px -2px 0 rgba(0,0,0,0.6),
+                2px -2px 0 rgba(0,0,0,0.6),
+                -2px 2px 0 rgba(0,0,0,0.6),
+                2px 2px 0 rgba(0,0,0,0.6);
+        }
+
+        .bottom-left { left: 16px; }
+        .bottom-right { right: 16px; }
+
+        .panel {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.55);
+            z-index: 20;
+        }
+
+        .panel.show {
+            display: flex;
+        }
+
+        .dialog {
+            width: 560px;
+            max-width: calc(100% - 24px);
+            background: #2e2e2e;
+            border: 4px solid #111;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 22px;
+        }
+
+        .dialog-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 14px;
+            color: white;
+        }
+
+        .dialog-text {
+            font-size: 18px;
+            line-height: 1.5;
+            color: #e6e6e6;
+            margin-bottom: 18px;
+        }
+
+        .dialog-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .small-btn {
+            height: 56px;
+            font-size: 20px;
+        }
+
+        /* =========================
+           게임 UI
+        ========================= */
+        #gameRoot {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 15px;
+            height: 15px;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            bottom: 10px;
+            width: 240px;
+            color: white;
+            font-family: 'Malgun Gothic', sans-serif;
+            background: rgba(0,0,0,0.85);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-y: auto;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        #ui::-webkit-scrollbar { width: 6px; }
+        #ui::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+        .inv-item {
+            margin-top: 4px;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            border: 1px solid transparent;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .inv-item:hover { background: rgba(255,255,255,0.1); }
+
+        .active {
+            background: rgba(0,255,0,0.15);
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        .category {
+            margin-top: 15px;
+            color: #ffeb3b;
+            font-weight: bold;
+            font-size: 0.9em;
+            border-bottom: 1px solid #555;
+            padding-bottom: 3px;
+        }
+
+        .block-count { color: #aaa; }
+        .active .block-count { color: #00ff00; }
+
+        #pauseHint {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            color: white;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 10px;
+            border-radius: 6px;
+        }
+
+        @media (max-width: 900px) {
+            .title { font-size: 58px; }
+            .subtitle { font-size: 24px; }
+            .splash { font-size: 18px; right: -70px; top: 28px; }
+            .menu { width: calc(100% - 24px); transform: translate(-50%, -36%); }
+            .mc-btn { height: 64px; font-size: 22px; }
+        }
+
+        @media (max-width: 640px) {
+            .menu-row { grid-template-columns: 1fr; }
+            .title { font-size: 42px; }
+            .subtitle { font-size: 18px; }
+            .splash { display: none; }
+        }
+    </style>
 </head>
-
 <body>
+    <!-- =========================
+         로비
+    ========================= -->
+    <div id="lobby">
+        <div class="lobby-screen">
+            <div class="title-wrap">
+                <div class="title">MINECRAFT</div>
+                <div class="subtitle">JAVA EDITION</div>
+                <div class="splash">Survival Time!</div>
+            </div>
 
-<!-- ===== 로비 ===== -->
-<div id="lobby">
-  <div class="title">MINECRAFT</div>
-  <button class="mc-btn" id="startBtn">싱글플레이</button>
-</div>
+            <div class="menu">
+                <div class="menu-stack">
+                    <button class="mc-btn" id="singleBtn">싱글플레이</button>
+                    <button class="mc-btn" id="multiBtn">멀티플레이</button>
+                    <button class="mc-btn realms" id="realmsBtn">Minecraft Realms</button>
 
-<!-- ===== 게임 ===== -->
-<canvas id="gameCanvas"></canvas>
+                    <div class="menu-row">
+                        <button class="mc-btn" id="settingsBtn">설정...</button>
+                        <button class="mc-btn" id="quitBtn">게임 종료</button>
+                    </div>
+                </div>
+            </div>
 
-<script type="module">
+            <div class="bottom-left">Minecraft 26.1</div>
+            <div class="bottom-right">Copyright Mojang AB. 재배포하지 마세요!</div>
 
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158/build/three.module.js";
+            <div class="panel" id="modal">
+                <div class="dialog">
+                    <div class="dialog-title" id="modalTitle">안내</div>
+                    <div class="dialog-text" id="modalText">내용</div>
+                    <div class="dialog-actions">
+                        <button class="mc-btn small-btn" id="confirmBtn">확인</button>
+                        <button class="mc-btn small-btn" id="cancelBtn">닫기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-// ===== 버튼 클릭 =====
-document.getElementById("startBtn").onclick = () => {
-  document.getElementById("lobby").style.display = "none";
-  document.getElementById("gameCanvas").style.display = "block";
-  startGame();
-};
+    <!-- =========================
+         게임
+    ========================= -->
+    <div id="gameRoot">
+        <div id="crosshair"></div>
+        <div id="ui">
+            <div style="font-weight:bold; font-size:1.1em; margin-bottom:5px; text-align:center;">⛏️ 인벤토리</div>
+            <div style="font-size:0.8em; color:#aaa; text-align:center; margin-bottom:10px;">[1~0] 키로 선택</div>
+            <div id="inventory-list"></div>
+        </div>
+        <div id="pauseHint">ESC: 마우스 해제</div>
+    </div>
 
-// ===== 게임 시작 =====
-function startGame(){
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 
-  const canvas = document.getElementById("gameCanvas");
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        // =========================
+        // 로비 모달
+        // =========================
+        const lobby = document.getElementById('lobby');
+        const gameRoot = document.getElementById('gameRoot');
 
-  const renderer = new THREE.WebGLRenderer({canvas});
-  renderer.setSize(window.innerWidth, window.innerHeight);
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalText = document.getElementById('modalText');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
 
-  // ===== 조명 =====
-  const light = new THREE.DirectionalLight(0xffffff,1);
-  light.position.set(5,10,5);
-  scene.add(light);
+        let confirmAction = null;
 
-  // ===== 바닥 =====
-  const geo = new THREE.BoxGeometry(1,1,1);
-  const mat = new THREE.MeshStandardMaterial({color:0x00ff00});
+        function openModal(title, text, onConfirm = null) {
+            modalTitle.textContent = title;
+            modalText.textContent = text;
+            confirmAction = onConfirm;
+            modal.classList.add('show');
+        }
 
-  for(let x=-10;x<10;x++){
-    for(let z=-10;z<10;z++){
-      const cube = new THREE.Mesh(geo,mat);
-      cube.position.set(x,0,z);
-      scene.add(cube);
-    }
-  }
+        function closeModal() {
+            modal.classList.remove('show');
+            confirmAction = null;
+        }
 
-  // ===== 플레이어 =====
-  camera.position.set(0,2,5);
+        confirmBtn.addEventListener('click', () => {
+            if (confirmAction) confirmAction();
+            closeModal();
+        });
 
-  let velocityY = 0;
-  let onGround = false;
+        cancelBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
 
-  const keys = {};
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
 
-  document.addEventListener("keydown", e => keys[e.key]=true);
-  document.addEventListener("keyup", e => keys[e.key]=false);
+        // =========================
+        // 게임 상태
+        // =========================
+        let gameStarted = false;
 
-  document.body.requestPointerLock();
+        // =========================
+        // Three.js 기본
+        // =========================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 30, 120);
 
-  let rotY = 0;
-  let rotX = 0;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 15, 15);
 
-  document.addEventListener("mousemove", e=>{
-    if(document.pointerLockElement){
-      rotY -= e.movementX * 0.002;
-      rotX -= e.movementY * 0.002;
-      rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotX));
-    }
-  });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
 
-  function animate(){
-    requestAnimationFrame(animate);
+        const controls = new PointerLockControls(camera, document.body);
 
-    // 방향 벡터
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
+        document.addEventListener('click', () => {
+            if (gameStarted && !controls.isLocked && lobby.style.display === 'none') {
+                controls.lock();
+            }
+        });
 
-    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-    // 이동
-    if(keys["w"]) camera.position.addScaledVector(dir, 0.1);
-    if(keys["s"]) camera.position.addScaledVector(dir, -0.1);
-    if(keys["a"]) camera.position.addScaledVector(right, -0.1);
-    if(keys["d"]) camera.position.addScaledVector(right, 0.1);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(10, 30, 15);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = 100;
+        sun.shadow.camera.left = -50;
+        sun.shadow.camera.right = 50;
+        sun.shadow.camera.top = 50;
+        sun.shadow.camera.bottom = -50;
+        scene.add(sun);
 
-    // 점프
-    if(keys[" "] && onGround){
-      velocityY = 0.2;
-      onGround = false;
-    }
+        // =========================
+        // 블록 데이터
+        // =========================
+        const BLOCK_DATA = {
+            "grass":     { name: "잔디 블록", color: 0x7cfc00, cat: "자연", key: "1" },
+            "dirt":      { name: "흙", color: 0x5d4037, cat: "자연", key: "2" },
+            "stone":     { name: "돌", color: 0x808080, cat: "자연", key: "3" },
+            "deepslate": { name: "심층암", color: 0x3d3d3d, cat: "자연", key: "4" },
+            "sand":      { name: "모래", color: 0xd2b48c, cat: "자연", key: "5" },
+            "log":       { name: "원목", color: 0x6f4e37, cat: "나무", key: "6" },
+            "leaves":    { name: "나뭇잎", color: 0x228b22, cat: "나무", key: "7" },
+            "coal":      { name: "석탄 광석", color: 0x2c2c2c, cat: "광석", key: "8" },
+            "iron":      { name: "철 광석", color: 0xd8d8d8, cat: "광석", key: "9" },
+            "diamond":   { name: "다이아몬드", color: 0x00ffff, cat: "광석", key: "0" }
+        };
 
-    velocityY -= 0.01;
-    camera.position.y += velocityY;
+        let inventory = {};
+        let selectedBlockType = "grass";
+        Object.keys(BLOCK_DATA).forEach(type => inventory[type] = 20);
 
-    // 바닥 충돌
-    if(camera.position.y < 2){
-      camera.position.y = 2;
-      velocityY = 0;
-      onGround = true;
-    }
+        function updateUI() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            let lastCat = '';
 
-    // 회전 적용
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = rotY;
-    camera.rotation.x = rotX;
+            Object.keys(BLOCK_DATA).forEach(type => {
+                const data = BLOCK_DATA[type];
 
-    renderer.render(scene, camera);
-  }
+                if (data.cat !== lastCat) {
+                    const catDiv = document.createElement('div');
+                    catDiv.className = 'category';
+                    catDiv.innerText = data.cat;
+                    list.appendChild(catDiv);
+                    lastCat = data.cat;
+                }
 
-  animate();
-}
+                const div = document.createElement('div');
+                div.className = `inv-item ${selectedBlockType === type ? 'active' : ''}`;
+                div.innerHTML = `<span>[${data.key}] ${data.name}</span><span class="block-count">${inventory[type]}</span>`;
+                div.onclick = () => {
+                    selectedBlockType = type;
+                    updateUI();
+                };
+                list.appendChild(div);
+            });
+        }
+        updateUI();
 
-</script>
+        // =========================
+        // 블록 관리
+        // =========================
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        const blocks = [];
+        const blockMap = new Map();
 
+        function blockKey(x, y, z) {
+            return `${x},${y},${z}`;
+        }
+
+        function hasBlockAt(x, y, z) {
+            return blockMap.has(blockKey(x, y, z));
+        }
+
+        function getBlockAt(x, y, z) {
+            return blockMap.get(blockKey(x, y, z)) || null;
+        }
+
+        function createBlock(x, y, z, type) {
+            x = Math.round(x);
+            y = Math.round(y);
+            z = Math.round(z);
+
+            if (hasBlockAt(x, y, z)) return null;
+
+            const mat = new THREE.MeshLambertMaterial({ color: BLOCK_DATA[type].color });
+            const block = new THREE.Mesh(boxGeo, mat);
+            block.position.set(x, y, z);
+            block.name = type;
+            block.castShadow = true;
+            block.receiveShadow = true;
+
+            scene.add(block);
+            blocks.push(block);
+            blockMap.set(blockKey(x, y, z), block);
+            return block;
+        }
+
+        function removeBlock(block) {
+            const idx = blocks.indexOf(block);
+            if (idx !== -1) blocks.splice(idx, 1);
+            blockMap.delete(blockKey(block.position.x, block.position.y, block.position.z));
+            scene.remove(block);
+        }
+
+        // =========================
+        // 월드 생성
+        // =========================
+        function growTree(x, y, z) {
+            const trunkHeight = 4 + Math.floor(Math.random() * 2);
+
+            for (let i = 0; i < trunkHeight; i++) {
+                createBlock(x, y + i, z, 'log');
+            }
+
+            const leafBaseY = y + trunkHeight - 2;
+            for (let li = 0; li < 3; li++) {
+                const radius = 2 - li;
+                for (let lx = -radius; lx <= radius; lx++) {
+                    for (let lz = -radius; lz <= radius; lz++) {
+                        if (li < 2 && Math.abs(lx) === radius && Math.abs(lz) === radius) continue;
+                        if (lx === 0 && lz === 0 && li < 2) continue;
+                        createBlock(x + lx, leafBaseY + li, z + lz, 'leaves');
+                    }
+                }
+            }
+        }
+
+        function generateWorld() {
+            const range = 15;
+            const groundY = 0;
+
+            for (let x = -range; x <= range; x++) {
+                for (let z = -range; z <= range; z++) {
+                    createBlock(x, groundY, z, 'grass');
+
+                    for (let y = -1; y >= -10; y--) {
+                        let type = 'stone';
+
+                        if (y >= -2) type = 'dirt';
+                        else if (y < -6) type = 'deepslate';
+
+                        const rand = Math.random();
+                        if (y < -1 && rand < 0.05) type = 'coal';
+                        if (y < -3 && rand < 0.03) type = 'iron';
+                        if (y < -7 && rand < 0.01) type = 'diamond';
+
+                        createBlock(x, y, z, type);
+                    }
+
+                    if (
+                        x > -range + 1 && x < range - 1 &&
+                        z > -range + 1 && z < range - 1 &&
+                        Math.random() < 0.03
+                    ) {
+                        growTree(x, groundY + 1, z);
+                    }
+                }
+            }
+        }
+
+        generateWorld();
+
+        // =========================
+        // 플레이어 충돌/물리
+        // =========================
+        const PLAYER_WIDTH = 0.6;
+        const PLAYER_HALF = PLAYER_WIDTH / 2;
+        const PLAYER_HEIGHT = 1.8;
+        const PLAYER_EYE_HEIGHT = 1.62;
+        const STEP_HEIGHT = 0.6;
+        const EPS = 0.001;
+
+        const velocity = new THREE.Vector3(0, 0, 0);
+        let canJump = false;
+
+        function getFeetY(pos) {
+            return pos.y - PLAYER_EYE_HEIGHT;
+        }
+
+        function setFeetY(pos, feetY) {
+            pos.y = feetY + PLAYER_EYE_HEIGHT;
+        }
+
+        function playerBoxAt(pos) {
+            const feetY = getFeetY(pos);
+            return {
+                minX: pos.x - PLAYER_HALF,
+                maxX: pos.x + PLAYER_HALF,
+                minY: feetY,
+                maxY: feetY + PLAYER_HEIGHT,
+                minZ: pos.z - PLAYER_HALF,
+                maxZ: pos.z + PLAYER_HALF
+            };
+        }
+
+        function blockBox(x, y, z) {
+            return {
+                minX: x - 0.5,
+                maxX: x + 0.5,
+                minY: y - 0.5,
+                maxY: y + 0.5,
+                minZ: z - 0.5,
+                maxZ: z + 0.5
+            };
+        }
+
+        function intersects(a, b) {
+            return (
+                a.minX < b.maxX && a.maxX > b.minX &&
+                a.minY < b.maxY && a.maxY > b.minY &&
+                a.minZ < b.maxZ && a.maxZ > b.minZ
+            );
+        }
+
+        function getNearbyBlocksForPos(pos, radiusXZ = 2, radiusY = 3) {
+            const out = [];
+            const cx = Math.floor(pos.x);
+            const cy = Math.floor(getFeetY(pos) + PLAYER_HEIGHT / 2);
+            const cz = Math.floor(pos.z);
+
+            for (let x = cx - radiusXZ; x <= cx + radiusXZ; x++) {
+                for (let y = cy - radiusY; y <= cy + radiusY; y++) {
+                    for (let z = cz - radiusXZ; z <= cz + radiusXZ; z++) {
+                        const block = getBlockAt(x, y, z);
+                        if (block) out.push(block);
+                    }
+                }
+            }
+            return out;
+        }
+
+        function collidesAt(pos) {
+            const pBox = playerBoxAt(pos);
+            const nearby = getNearbyBlocksForPos(pos);
+
+            for (const block of nearby) {
+                const bBox = blockBox(block.position.x, block.position.y, block.position.z);
+                if (intersects(pBox, bBox)) return true;
+            }
+            return false;
+        }
+
+        function isPlacementInsidePlayer(pos) {
+            const pBox = playerBoxAt(camera.position);
+            const bBox = blockBox(pos.x, pos.y, pos.z);
+            return intersects(pBox, bBox);
+        }
+
+        function getFloorY(pos) {
+            const pBox = playerBoxAt(pos);
+            const nearby = getNearbyBlocksForPos(pos, 2, 4);
+
+            let bestTop = -Infinity;
+
+            for (const block of nearby) {
+                const bb = blockBox(block.position.x, block.position.y, block.position.z);
+
+                const overlapX = pBox.maxX > bb.minX + EPS && pBox.minX < bb.maxX - EPS;
+                const overlapZ = pBox.maxZ > bb.minZ + EPS && pBox.minZ < bb.maxZ - EPS;
+
+                if (!overlapX || !overlapZ) continue;
+
+                if (bb.maxY <= pBox.minY + 0.2) {
+                    if (bb.maxY > bestTop) bestTop = bb.maxY;
+                }
+            }
+
+            return bestTop;
+        }
+
+        function getCeilingY(pos) {
+            const pBox = playerBoxAt(pos);
+            const nearby = getNearbyBlocksForPos(pos, 2, 4);
+
+            let bestBottom = Infinity;
+
+            for (const block of nearby) {
+                const bb = blockBox(block.position.x, block.position.y, block.position.z);
+
+                const overlapX = pBox.maxX > bb.minX + EPS && pBox.minX < bb.maxX - EPS;
+                const overlapZ = pBox.maxZ > bb.minZ + EPS && pBox.minZ < bb.maxZ - EPS;
+
+                if (!overlapX || !overlapZ) continue;
+
+                if (bb.minY >= pBox.maxY - 0.2) {
+                    if (bb.minY < bestBottom) bestBottom = bb.minY;
+                }
+            }
+
+            return bestBottom;
+        }
+
+        function tryMoveAxis(dx, dz) {
+            if (dx !== 0) {
+                const next = camera.position.clone();
+                next.x += dx;
+
+                if (!collidesAt(next)) {
+                    camera.position.x = next.x;
+                } else {
+                    const step = next.clone();
+                    step.y += STEP_HEIGHT;
+                    if (!collidesAt(step)) {
+                        camera.position.x = next.x;
+                        camera.position.y = step.y;
+                    } else {
+                        velocity.x = 0;
+                    }
+                }
+            }
+
+            if (dz !== 0) {
+                const next = camera.position.clone();
+                next.z += dz;
+
+                if (!collidesAt(next)) {
+                    camera.position.z = next.z;
+                } else {
+                    const step = next.clone();
+                    step.y += STEP_HEIGHT;
+                    if (!collidesAt(step)) {
+                        camera.position.z = next.z;
+                        camera.position.y = step.y;
+                    } else {
+                        velocity.z = 0;
+                    }
+                }
+            }
+        }
+
+        function resolveVertical(delta) {
+            camera.position.y += velocity.y * delta;
+
+            if (velocity.y > 0) {
+                const ceiling = getCeilingY(camera.position);
+                if (ceiling < Infinity) {
+                    const pBox = playerBoxAt(camera.position);
+                    if (pBox.maxY > ceiling) {
+                        const newFeet = ceiling - PLAYER_HEIGHT - EPS;
+                        setFeetY(camera.position, newFeet);
+                        velocity.y = 0;
+                    }
+                }
+            }
+
+            const floorY = getFloorY(camera.position);
+            canJump = false;
+
+            if (floorY > -Infinity) {
+                const feetY = getFeetY(camera.position);
+
+                if (feetY <= floorY + 0.08 && velocity.y <= 0) {
+                    setFeetY(camera.position, floorY);
+                    velocity.y = 0;
+                    canJump = true;
+                }
+            }
+        }
+
+        // =========================
+        // 하이라이트
+        // =========================
+        const highlightGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+        const highlightMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true
+        });
+        const highlight = new THREE.Mesh(highlightGeo, highlightMat);
+        highlight.visible = false;
+        scene.add(highlight);
+
+        const raycaster = new THREE.Raycaster();
+
+        function updateBlockHighlight() {
+            if (!gameStarted) {
+                highlight.visible = false;
+                return;
+            }
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            raycaster.far = 8;
+
+            const hits = raycaster.intersectObjects(blocks);
+
+            if (hits.length > 0) {
+                highlight.position.copy(hits[0].object.position);
+                highlight.visible = true;
+            } else {
+                highlight.visible = false;
+            }
+        }
+
+        // =========================
+        // 상호작용
+        // =========================
+        window.addEventListener('mousedown', (e) => {
+            if (!gameStarted || !controls.isLocked) return;
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            raycaster.far = 8;
+
+            const hits = raycaster.intersectObjects(blocks);
+
+            if (hits.length > 0) {
+                const hit = hits[0];
+
+                if (e.button === 0) {
+                    const blockType = hit.object.name;
+                    inventory[blockType]++;
+                    removeBlock(hit.object);
+                    updateUI();
+                }
+
+                if (e.button === 2) {
+                    if (inventory[selectedBlockType] <= 0) return;
+                    if (hit.distance <= 1.5) return;
+
+                    const pos = hit.object.position.clone().add(hit.face.normal);
+                    pos.x = Math.round(pos.x);
+                    pos.y = Math.round(pos.y);
+                    pos.z = Math.round(pos.z);
+
+                    if (hasBlockAt(pos.x, pos.y, pos.z)) return;
+                    if (isPlacementInsidePlayer(pos)) return;
+
+                    createBlock(pos.x, pos.y, pos.z, selectedBlockType);
+                    inventory[selectedBlockType]--;
+                    updateUI();
+                }
+            }
+        });
+
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        // =========================
+        // 입력
+        // =========================
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (!gameStarted) return;
+
+            Object.keys(BLOCK_DATA).forEach(type => {
+                if (e.key === BLOCK_DATA[type].key) {
+                    selectedBlockType = type;
+                    updateUI();
+                }
+            });
+
+            if (e.code === 'KeyW') moveForward = true;
+            if (e.code === 'KeyS') moveBackward = true;
+            if (e.code === 'KeyA') moveLeft = true;
+            if (e.code === 'KeyD') moveRight = true;
+
+            if (e.code === 'Space' && canJump) {
+                velocity.y = 8.5;
+                canJump = false;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!gameStarted) return;
+
+            if (e.code === 'KeyW') moveForward = false;
+            if (e.code === 'KeyS') moveBackward = false;
+            if (e.code === 'KeyA') moveLeft = false;
+            if (e.code === 'KeyD') moveRight = false;
+        });
+
+        // =========================
+        // 로비 버튼
+        // =========================
+        function startGame() {
+            lobby.style.display = 'none';
+            gameRoot.style.display = 'block';
+            gameStarted = true;
+            controls.lock();
+        }
+
+        document.getElementById('singleBtn').addEventListener('click', () => {
+            startGame();
+        });
+
+        document.getElementById('multiBtn').addEventListener('click', () => {
+            openModal('멀티플레이', '멀티플레이는 다음 단계에서 붙이면 된다.');
+        });
+
+        document.getElementById('realmsBtn').addEventListener('click', () => {
+            openModal('Minecraft Realms', 'Realms 기능은 나중에 연결하면 된다.');
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            openModal('설정', '설정 메뉴는 다음 단계에서 붙이면 된다.');
+        });
+
+        document.getElementById('quitBtn').addEventListener('click', () => {
+            openModal('게임 종료', '브라우저에서는 탭을 닫거나 뒤로가기를 사용하면 된다.');
+        });
+
+        // =========================
+        // 렌더 루프
+        // =========================
+        let prevTime = performance.now();
+
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+        const moveDir = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.05);
+
+            if (gameStarted && controls.isLocked) {
+                velocity.x *= Math.max(0, 1 - 10 * delta);
+                velocity.z *= Math.max(0, 1 - 10 * delta);
+
+                velocity.y -= 24 * delta;
+
+                camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+                moveDir.set(0, 0, 0);
+                if (moveForward) moveDir.add(forward);
+                if (moveBackward) moveDir.sub(forward);
+                if (moveRight) moveDir.add(right);
+                if (moveLeft) moveDir.sub(right);
+
+                if (moveDir.lengthSq() > 0) {
+                    moveDir.normalize();
+                    const accel = 30;
+                    velocity.x += moveDir.x * accel * delta;
+                    velocity.z += moveDir.z * accel * delta;
+                }
+
+                const maxSpeed = 6;
+                const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+                if (horizontalSpeed > maxSpeed) {
+                    const scale = maxSpeed / horizontalSpeed;
+                    velocity.x *= scale;
+                    velocity.z *= scale;
+                }
+
+                tryMoveAxis(velocity.x * delta, velocity.z * delta);
+                resolveVertical(delta);
+
+                if (camera.position.y < -30) {
+                    camera.position.set(0, 15, 15);
+                    velocity.set(0, 0, 0);
+                }
+            }
+
+            updateBlockHighlight();
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
 </body>
 </html>
