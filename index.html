@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D Minecraft - 충돌 구현 및 나무 업데이트</title>
+    <title>3D Minecraft - 이동 및 충돌 완벽 수정</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87ceeb; }
         #crosshair {
@@ -14,19 +14,17 @@
             position: absolute; top: 10px; left: 10px; bottom: 10px;
             color: white; font-family: 'Malgun Gothic', sans-serif;
             background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px;
-            overflow-y: auto; width: 240px;
+            overflow-y: auto; width: 220px;
         }
-        .inv-item { margin-top: 4px; padding: 6px; border-radius: 4px; font-size: 0.85em; display: flex; justify-content: space-between; cursor: pointer;}
-        .inv-item:hover { background: rgba(255,255,255,0.1); }
+        .inv-item { margin-top: 4px; padding: 6px; border-radius: 4px; font-size: 0.85em; display: flex; justify-content: space-between; }
         .active { background: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #00ff00; font-weight: bold; }
-        .category { margin-top: 15px; color: #ffeb3b; font-weight: bold; font-size: 0.9em; border-bottom: 1px solid #555; padding-bottom: 3px; }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
     <div id="ui">
-        <div style="font-weight: bold; margin-bottom: 10px; text-align:center;">⛏️ 인벤토리</div>
-        <div style="font-size:0.8em; color:#aaa; text-align:center; margin-bottom:10px;">[1~0] 키로 선택</div>
+        <div style="font-weight: bold; margin-bottom: 5px; text-align:center;">⛏️ 인벤토리</div>
+        <div style="font-size:0.75em; color:#aaa; text-align:center; margin-bottom:10px;">화면 클릭 후 WASD로 이동</div>
         <div id="inventory-list"></div>
     </div>
 
@@ -43,53 +41,38 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // --- [설정 데이터] ---
+        // 1. 블록 데이터
         const BLOCK_DATA = {
-            "grass": { name: "잔디 블록", color: 0x7cfc00, cat: "자연", key: "1" },
-            "dirt":  { name: "흙", color: 0x5d4037, cat: "자연", key: "2" },
-            "stone": { name: "돌", color: 0x808080, cat: "자연", key: "3" },
-            "deepslate": { name: "심층암", color: 0x3d3d3d, cat: "자연", key: "4" },
-            "log": { name: "원목", color: 0x6f4e37, cat: "나무", key: "5" },
-            "leaves": { name: "나뭇잎", color: 0x228b22, cat: "나무", key: "6" },
-            "coal": { name: "석탄 광석", color: 0x2c2c2c, cat: "광석", key: "7" },
-            "iron": { name: "철 광석", color: 0xd8d8d8, cat: "광석", key: "8" },
-            "diamond": { name: "다이아몬드", color: 0x00ffff, cat: "광석", key: "9" }
+            "grass": { name: "잔디", color: 0x7cfc00, key: "1" },
+            "dirt":  { name: "흙", color: 0x5d4037, key: "2" },
+            "stone": { name: "돌", color: 0x808080, key: "3" },
+            "log": { name: "원목", color: 0x6f4e37, key: "4" },
+            "leaves": { name: "나뭇잎", color: 0x228b22, key: "5" }
         };
 
-        // --- 상태 관리 ---
-        let inventory = {};
+        let inventory = { grass: 64, dirt: 64, stone: 64, log: 64, leaves: 64 };
         let selectedBlockType = "grass";
-        Object.keys(BLOCK_DATA).forEach(type => inventory[type] = 20); // 초기 개수
 
         function updateUI() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = '';
-            let lastCat = "";
             Object.keys(BLOCK_DATA).forEach(type => {
-                const data = BLOCK_DATA[type];
-                if(data.cat !== lastCat) {
-                    const catDiv = document.createElement('div');
-                    catDiv.className = 'category';
-                    catDiv.innerText = data.cat;
-                    list.appendChild(catDiv);
-                    lastCat = data.cat;
-                }
                 const div = document.createElement('div');
                 div.className = `inv-item ${selectedBlockType === type ? 'active' : ''}`;
-                div.innerHTML = `<span>[${data.key}] ${data.name}</span> <span>${inventory[type]}</span>`;
-                div.onclick = () => { selectedBlockType = type; updateUI(); };
+                div.innerHTML = `<span>${BLOCK_DATA[type].name}</span> <span>${inventory[type]}</span>`;
                 list.appendChild(div);
             });
         }
         updateUI();
 
-        // --- Three.js 엔진 설정 ---
+        // 2. Scene 및 카메라 설정
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0x87ceeb, 20, 80);
-
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
+        // 중요: 공중 스폰 (끼임 방지)
+        camera.position.set(0, 10, 5);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -97,16 +80,12 @@
         const controls = new PointerLockControls(camera, document.body);
         document.addEventListener('click', () => controls.lock());
 
-        // 조명
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-        sun.position.set(10, 20, 10);
-        scene.add(sun);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
-        // --- 블록 및 충돌 박스 관리 ---
+        // 3. 지형 생성
+        const blocks = [];
+        const blockBoxes = [];
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-        const blocks = []; // 모든 블록 메쉬 배열
-        const blockBoxes = []; // 충돌 계산용 AABB 배열
 
         function createBlock(x, y, z, type) {
             const mat = new THREE.MeshLambertMaterial({ color: BLOCK_DATA[type].color });
@@ -115,119 +94,35 @@
             block.name = type;
             scene.add(block);
             blocks.push(block);
-
-            // 해당 블록의 AABB 생성 및 저장
-            const box = new THREE.Box3().setFromObject(block);
-            blockBoxes.push(box);
+            blockBoxes.push(new THREE.Box3().setFromObject(block));
         }
 
-        // --- 지형 및 마크 스타일 나무 생성 ---
-        const range = 15;
-        for (let x = -range; x <= range; x++) {
-            for (let z = -range; z <= range; z++) {
+        // 지형 깔기
+        for (let x = -10; x <= 10; x++) {
+            for (let z = -10; z <= 10; z++) {
                 createBlock(x, 0, z, 'grass');
                 createBlock(x, -1, z, 'dirt');
-                for(let y=-2; y>=-5; y--) createBlock(x, y, z, 'stone');
-                
-                // 나무 생성 (가장자리 제외, 랜덤 확률)
-                if (x > -range+2 && x < range-2 && z > -range+2 && z < range-2 && Math.random() < 0.02) {
-                    growMinecraftTree(x, 1, z);
-                }
             }
         }
 
-        // 마인크래프트 스타일 참나무 생성 함수
-        function growMinecraftTree(x, y, z) {
-            const trunkHeight = 4 + Math.floor(Math.random() * 2); // 원목 높이 (4~5)
-            
-            // 1. 원목(Log) 쌓기
-            for (let i = 0; i < trunkHeight; i++) {
-                createBlock(x, y + i, z, 'log');
-            }
-            
-            // 2. 나뭇잎(Leaves) 생성 로직 (마크 스타일 불규칙 십자가/사각형)
-            const leafBaseY = y + trunkHeight - 2; // 나뭇잎이 시작될 높이
+        // 4. 이동 로직
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const playerBox = new THREE.Box3();
+        const playerSize = new THREE.Vector3(0.5, 1.7, 0.5); // 약간 작게 설정해서 이동 원활하게
 
-            for (let li = 0; li < 4; li++) { // 나뭇잎 층수 (총 4층)
-                let radius = 2; // 기본 반경 (아래 2층)
-                if (li >= 2) radius = 1; // 위쪽 2층은 좁게
-
-                for (let lx = -radius; lx <= radius; lx++) {
-                    for (let lz = -radius; lz <= radius; lz++) {
-                        // 모서리를 깎아 둥글게 표현 (맨 윗층 제외하고 확률적으로 깎음)
-                        if (Math.abs(lx) === radius && Math.abs(lz) === radius) {
-                            if (li < 3 && Math.random() < 0.5) continue; // 아래쪽 모서리는 반반 확률로 안생김
-                            if (li === 3) continue; // 맨 꼭대기 모서리는 무조건 안생김
-                        }
-                        
-                        // 원목이 있는 위치는 제외하고 나뭇잎 생성
-                        if (lx === 0 && lz === 0 && li < 2) continue;
-                        
-                        // 맨 윗층(li=3)은 십자가 모양으로
-                        if (li === 3 && (Math.abs(lx) + Math.abs(lz) > 1)) continue;
-
-                        createBlock(x + lx, leafBaseY + li, z + lz, 'leaves');
-                    }
-                }
-            }
-        }
-
-        // 카메라 시작 위치 설정 (지형 생성 후 안전한 곳으로)
-        camera.position.set(0, 5, 10);
-
-        // --- 상호작용 (설치/파괴) ---
-        window.addEventListener('mousedown', (e) => {
-            if (!controls.isLocked) return;
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            
-            // 레이캐스터 거리 제한 (팔 닿는 거리)
-            raycaster.far = 8; 
-            const intersects = raycaster.intersectObjects(blocks);
-
-            if (intersects.length > 0) {
-                const intersect = intersects[0];
-                if (e.button === 0) { // 좌클릭: 파괴
-                    const index = blocks.indexOf(intersect.object);
-                    if (index > -1) {
-                        inventory[intersect.object.name]++; // 캐낸 블록 획득
-                        scene.remove(intersect.object);
-                        blocks.splice(index, 1);
-                        blockBoxes.splice(index, 1); // 충돌 박스도 함께 제거
-                    }
-                } 
-                else if (e.button === 2) { // 우클릭: 설치
-                    if (inventory[selectedBlockType] > 0) {
-                        const pos = intersect.object.position.clone().add(intersect.face.normal);
-                        
-                        // 설치하려는 위치에 플레이어가 있는지 확인 (겹침 방지)
-                        const tempBox = new THREE.Box3().setFromCenterAndSize(
-                            pos, new THREE.Vector3(0.99, 0.99, 0.99)
-                        );
-                        if (tempBox.intersectsBox(playerBox)) {
-                            console.log("플레이어와 겹쳐서 설치할 수 없습니다.");
-                            return; 
-                        }
-                        
-                        createBlock(pos.x, pos.y, pos.z, selectedBlockType);
-                        inventory[selectedBlockType]--; // 설치한 블록 소모
-                    }
-                }
-                updateUI(); // 인벤토리 UI 업데이트
-            }
-        });
-
-        // 입력 처리 (선택 및 이동)
         document.addEventListener('keydown', (e) => {
-            Object.keys(BLOCK_DATA).forEach(type => { if (e.key === BLOCK_DATA[type].key) { selectedBlockType = type; updateUI(); } });
             if (e.code === 'KeyW') moveForward = true;
             if (e.code === 'KeyA') moveLeft = true;
             if (e.code === 'KeyS') moveBackward = true;
             if (e.code === 'KeyD') moveRight = true;
-            // 점프 (충돌 감지 기반 canJump 변수 사용)
             if (e.code === 'Space' && canJump) { velocity.y += 8; canJump = false; }
+            if (["1","2","3","4","5"].includes(e.key)) {
+                selectedBlockType = Object.keys(BLOCK_DATA)[parseInt(e.key)-1];
+                updateUI();
+            }
         });
-
         document.addEventListener('keyup', (e) => {
             if (e.code === 'KeyW') moveForward = false;
             if (e.code === 'KeyA') moveLeft = false;
@@ -235,18 +130,7 @@
             if (e.code === 'KeyD') moveRight = false;
         });
 
-        window.addEventListener('contextmenu', e => e.preventDefault());
-
-        // --- 물리 및 AABB 충돌 구현 ---
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
         let prevTime = performance.now();
-
-        // 플레이어 충돌 박스 (폭 0.6, 높이 1.8)
-        const playerBox = new THREE.Box3();
-        const playerSize = new THREE.Vector3(0.6, 1.8, 0.6);
-
         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
@@ -254,82 +138,75 @@
             if (controls.isLocked) {
                 const delta = (time - prevTime) / 1000;
                 
-                // 마찰력 및 중력
+                // 속도 감쇠
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 9.8 * 2.5 * delta; // 중력
+                velocity.y -= 9.8 * 2.5 * delta; 
 
-                // 이동 방향
+                // 입력 처리
                 direction.z = Number(moveForward) - Number(moveBackward);
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize();
 
-                // 이동 속도
-                const moveSpeed = 100.0;
-                if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
+                if (moveForward || moveBackward) velocity.z -= direction.z * 100.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * delta;
 
-                // --- [AABB 충돌 감지 및 처리] ---
-                
-                // 1. 현재 카메라 위치 기반으로 플레이어 충돌 박스 업데이트
-                // 카메라 높이는 1.6, 발바닥은 0, 정수리는 1.8로 가정
-                const playerBottom = camera.position.y - 1.6;
+                // --- 충돌 감지 로직 ---
+                const oldPos = camera.position.clone();
+
+                // 1. Y축 이동 (중력/점프)
+                camera.position.y += velocity.y * delta;
                 playerBox.setFromCenterAndSize(
-                    new THREE.Vector3(camera.position.x, playerBottom + 0.9, camera.position.z),
+                    new THREE.Vector3(camera.position.x, camera.position.y - 0.8, camera.position.z),
                     playerSize
                 );
-
-                // 2. Y축 충돌 (바닥/천장)
-                camera.position.y += velocity.y * delta;
-                playerBox.translate(new THREE.Vector3(0, velocity.y * delta, 0));
-                canJump = false; // 기본적으로 점프 불가 상태
-
+                
+                canJump = false;
                 for (let box of blockBoxes) {
                     if (playerBox.intersectsBox(box)) {
-                        if (velocity.y > 0) { // 천장에 부딪힘
-                            camera.position.y = box.min.y - 0.21; // 머리 위치 조정 (약간의 여유)
-                            velocity.y = 0;
-                        } else if (velocity.y < 0) { // 바닥에 착지
-                            camera.position.y = box.max.y + 1.6; // 발 위치 조정
-                            velocity.y = 0;
-                            canJump = true; // 바닥에 닿았을 때만 점프 가능
+                        if (velocity.y < 0) { // 착지
+                            camera.position.y = box.max.y + 1.6;
+                            canJump = true;
+                        } else { // 천장 충돌
+                            camera.position.y = box.min.y - 0.1;
                         }
+                        velocity.y = 0;
+                        break;
                     }
                 }
 
-                // 3. X축 충돌 (옆면)
-                const moveX = -velocity.x * delta; // PointerLockControls는 반대 방향
+                // 2. X축 이동
+                const moveX = -velocity.x * delta;
                 camera.position.x += moveX;
-                playerBox.translate(new THREE.Vector3(moveX, 0, 0));
-
+                playerBox.setFromCenterAndSize(
+                    new THREE.Vector3(camera.position.x, camera.position.y - 0.8, camera.position.z),
+                    playerSize
+                );
                 for (let box of blockBoxes) {
                     if (playerBox.intersectsBox(box)) {
-                        camera.position.x -= moveX; // 이동 취소
-                        playerBox.translate(new THREE.Vector3(-moveX, 0, 0));
+                        camera.position.x = oldPos.x;
                         velocity.x = 0;
-                        break; // 하나라도 부딪히면 멈춤
+                        break;
                     }
                 }
 
-                // 4. Z축 충돌 (앞뒷면)
+                // 3. Z축 이동
                 const moveZ = -velocity.z * delta;
                 camera.position.z += moveZ;
-                playerBox.translate(new THREE.Vector3(0, 0, moveZ));
-
+                playerBox.setFromCenterAndSize(
+                    new THREE.Vector3(camera.position.x, camera.position.y - 0.8, camera.position.z),
+                    playerSize
+                );
                 for (let box of blockBoxes) {
                     if (playerBox.intersectsBox(box)) {
-                        camera.position.z -= moveZ; // 이동 취소
-                        playerBox.translate(new THREE.Vector3(0, 0, -moveZ));
+                        camera.position.z = oldPos.z;
                         velocity.z = 0;
                         break;
                     }
                 }
-                
-                // 낙하 데드존 (맵 아래로 떨어졌을 때 리스폰)
-                if(camera.position.y < -20) {
-                    camera.position.set(0, 10, 0);
-                    velocity.set(0,0,0);
-                }
+
+                // 맵 밖으로 추락 시 리스폰
+                if (camera.position.y < -10) camera.position.set(0, 10, 5);
             }
             prevTime = time;
             renderer.render(scene, camera);
