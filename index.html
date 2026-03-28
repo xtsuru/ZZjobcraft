@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Minecraft - 텔레포트 버그 수정본</title>
+    <title>3D Minecraft - 충돌 수정 완성본</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87ceeb; }
         #crosshair {
@@ -29,8 +29,10 @@
         }
         .inv-item:hover { background: rgba(255,255,255,0.1); }
         .active {
-            background: rgba(0, 255, 0, 0.15);
-            border: 1px solid #00ff00; color: #00ff00; font-weight: bold;
+            background: rgba(0,255,0,0.15);
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-weight: bold;
         }
         .category {
             margin-top: 15px; color: #ffeb3b; font-weight: bold; font-size: 0.9em;
@@ -61,6 +63,9 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
+        // =========================
+        // 데이터
+        // =========================
         const BLOCK_DATA = {
             "grass":     { name: "잔디 블록", color: 0x7cfc00, cat: "자연", key: "1" },
             "dirt":      { name: "흙", color: 0x5d4037, cat: "자연", key: "2" },
@@ -106,6 +111,9 @@
         }
         updateUI();
 
+        // =========================
+        // Three.js 기본 세팅
+        // =========================
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
         scene.fog = new THREE.Fog(0x87ceeb, 30, 120);
@@ -139,22 +147,56 @@
         sun.shadow.camera.bottom = -50;
         scene.add(sun);
 
+        // =========================
+        // 블록 관리
+        // =========================
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
         const blocks = [];
+        const blockMap = new Map();
+
+        function blockKey(x, y, z) {
+            return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
+        }
+
+        function hasBlockAt(x, y, z) {
+            return blockMap.has(blockKey(x, y, z));
+        }
+
+        function getBlockAt(x, y, z) {
+            return blockMap.get(blockKey(x, y, z)) || null;
+        }
 
         function createBlock(x, y, z, type) {
+            const rx = Math.round(x);
+            const ry = Math.round(y);
+            const rz = Math.round(z);
+
+            if (hasBlockAt(rx, ry, rz)) return null;
+
             const mat = new THREE.MeshLambertMaterial({ color: BLOCK_DATA[type].color });
             const block = new THREE.Mesh(boxGeo, mat);
-            block.position.set(x, y, z);
+            block.position.set(rx, ry, rz);
             block.name = type;
-
             block.castShadow = true;
             block.receiveShadow = true;
 
             scene.add(block);
             blocks.push(block);
+            blockMap.set(blockKey(rx, ry, rz), block);
+
+            return block;
         }
 
+        function removeBlock(block) {
+            const idx = blocks.indexOf(block);
+            if (idx !== -1) blocks.splice(idx, 1);
+            blockMap.delete(blockKey(block.position.x, block.position.y, block.position.z));
+            scene.remove(block);
+        }
+
+        // =========================
+        // 지형 생성
+        // =========================
         const range = 15;
         const groundY = 0;
 
@@ -206,6 +248,182 @@
             }
         }
 
+        // =========================
+        // 플레이어 충돌 설정
+        // =========================
+        const PLAYER_WIDTH = 0.6;
+        const PLAYER_HALF = PLAYER_WIDTH / 2;
+        const PLAYER_HEIGHT = 1.8;
+        const EYE_OFFSET = 0.3; // 카메라가 머리 꼭대기보다 약간 아래
+        const STEP_HEIGHT = 0.6;
+
+        function getPlayerBounds(pos) {
+            const top = pos.y + EYE_OFFSET;
+            const bottom = top - PLAYER_HEIGHT;
+
+            return {
+                minX: pos.x - PLAYER_HALF,
+                maxX: pos.x + PLAYER_HALF,
+                minY: bottom,
+                maxY: top,
+                minZ: pos.z - PLAYER_HALF,
+                maxZ: pos.z + PLAYER_HALF
+            };
+        }
+
+        function boxesIntersect(a, b) {
+            return (
+                a.minX < b.maxX && a.maxX > b.minX &&
+                a.minY < b.maxY && a.maxY > b.minY &&
+                a.minZ < b.maxZ && a.maxZ > b.minZ
+            );
+        }
+
+        function blockBounds(x, y, z) {
+            return {
+                minX: x - 0.5,
+                maxX: x + 0.5,
+                minY: y - 0.5,
+                maxY: y + 0.5,
+                minZ: z - 0.5,
+                maxZ: z + 0.5
+            };
+        }
+
+        function getNearbyBlocks(pos, radius = 2) {
+            const out = [];
+            const cx = Math.round(pos.x);
+            const cy = Math.round(pos.y);
+            const cz = Math.round(pos.z);
+
+            for (let x = cx - radius; x <= cx + radius; x++) {
+                for (let y = cy - radius - 2; y <= cy + radius + 2; y++) {
+                    for (let z = cz - radius; z <= cz + radius; z++) {
+                        const block = getBlockAt(x, y, z);
+                        if (block) out.push(block);
+                    }
+                }
+            }
+            return out;
+        }
+
+        function collidesAtPosition(pos) {
+            const playerBox = getPlayerBounds(pos);
+            const nearby = getNearbyBlocks(pos, 2);
+
+            for (const block of nearby) {
+                const bb = blockBounds(block.position.x, block.position.y, block.position.z);
+                if (boxesIntersect(playerBox, bb)) return true;
+            }
+            return false;
+        }
+
+        function isPlacementInsidePlayer(pos) {
+            const playerBox = getPlayerBounds(camera.position);
+            const bb = blockBounds(pos.x, pos.y, pos.z);
+            return boxesIntersect(playerBox, bb);
+        }
+
+        function resolveGroundAndCeiling() {
+            canJump = false;
+
+            const playerBox = getPlayerBounds(camera.position);
+            const nearby = getNearbyBlocks(camera.position, 2);
+
+            let bestFloorTop = -Infinity;
+            let bestCeilingBottom = Infinity;
+
+            for (const block of nearby) {
+                const bb = blockBounds(block.position.x, block.position.y, block.position.z);
+
+                const overlapX = playerBox.maxX > bb.minX && playerBox.minX < bb.maxX;
+                const overlapZ = playerBox.maxZ > bb.minZ && playerBox.minZ < bb.maxZ;
+
+                if (!overlapX || !overlapZ) continue;
+
+                // 바닥 후보: 플레이어 발 아래
+                if (bb.maxY <= playerBox.minY + 0.15) {
+                    if (bb.maxY > bestFloorTop) {
+                        bestFloorTop = bb.maxY;
+                    }
+                }
+
+                // 천장 후보: 플레이어 머리 위
+                if (bb.minY >= playerBox.maxY - 0.15) {
+                    if (bb.minY < bestCeilingBottom) {
+                        bestCeilingBottom = bb.minY;
+                    }
+                }
+            }
+
+            // 바닥에 착지
+            if (bestFloorTop > -Infinity) {
+                const desiredBottom = bestFloorTop;
+                const currentBottom = playerBox.minY;
+
+                if (currentBottom <= desiredBottom + 0.08 && velocity.y <= 0) {
+                    const desiredTop = desiredBottom + PLAYER_HEIGHT;
+                    camera.position.y = desiredTop - EYE_OFFSET;
+                    velocity.y = 0;
+                    canJump = true;
+                }
+            }
+
+            // 천장 충돌
+            const updatedBox = getPlayerBounds(camera.position);
+            if (bestCeilingBottom < Infinity) {
+                if (updatedBox.maxY >= bestCeilingBottom && velocity.y > 0) {
+                    const desiredTop = bestCeilingBottom;
+                    camera.position.y = desiredTop - EYE_OFFSET;
+                    velocity.y = 0;
+                }
+            }
+        }
+
+        function tryMoveHorizontal(deltaX, deltaZ) {
+            // X 먼저
+            if (deltaX !== 0) {
+                const testPosX = camera.position.clone();
+                testPosX.x += deltaX;
+
+                if (!collidesAtPosition(testPosX)) {
+                    camera.position.x = testPosX.x;
+                } else {
+                    // 1칸 턱 느낌 완화용 아주 약한 스텝업
+                    const stepPos = testPosX.clone();
+                    stepPos.y += STEP_HEIGHT;
+                    if (!collidesAtPosition(stepPos)) {
+                        camera.position.x = testPosX.x;
+                        camera.position.y += STEP_HEIGHT;
+                    } else {
+                        velocity.x = 0;
+                    }
+                }
+            }
+
+            // Z 다음
+            if (deltaZ !== 0) {
+                const testPosZ = camera.position.clone();
+                testPosZ.z += deltaZ;
+
+                if (!collidesAtPosition(testPosZ)) {
+                    camera.position.z = testPosZ.z;
+                } else {
+                    const stepPos = testPosZ.clone();
+                    stepPos.y += STEP_HEIGHT;
+                    if (!collidesAtPosition(stepPos)) {
+                        camera.position.z = testPosZ.z;
+                        camera.position.y += STEP_HEIGHT;
+                    } else {
+                        velocity.z = 0;
+                    }
+                }
+            }
+        }
+
+        // =========================
+        // 상호작용
+        // =========================
         window.addEventListener('mousedown', (e) => {
             if (!controls.isLocked) return;
 
@@ -221,23 +439,17 @@
                 if (e.button === 0) {
                     const blockType = intersect.object.name;
                     inventory[blockType]++;
-
-                    scene.remove(intersect.object);
-                    blocks.splice(blocks.indexOf(intersect.object), 1);
-                } else if (e.button === 2) {
+                    removeBlock(intersect.object);
+                }
+                else if (e.button === 2) {
                     if (inventory[selectedBlockType] > 0 && intersect.distance > 1.5) {
                         const pos = intersect.object.position.clone().add(intersect.face.normal);
+                        pos.x = Math.round(pos.x);
+                        pos.y = Math.round(pos.y);
+                        pos.z = Math.round(pos.z);
 
-                        if (
-                            Math.round(pos.x) === Math.round(camera.position.x) &&
-                            Math.round(pos.z) === Math.round(camera.position.z) &&
-                            (
-                                Math.round(pos.y) === Math.round(camera.position.y) ||
-                                Math.round(pos.y) === Math.round(camera.position.y - 1)
-                            )
-                        ) {
-                            return;
-                        }
+                        if (hasBlockAt(pos.x, pos.y, pos.z)) return;
+                        if (isPlacementInsidePlayer(pos)) return;
 
                         createBlock(pos.x, pos.y, pos.z, selectedBlockType);
                         inventory[selectedBlockType]--;
@@ -247,6 +459,18 @@
                 updateUI();
             }
         });
+
+        // =========================
+        // 입력
+        // =========================
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let canJump = false;
+
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
 
         document.addEventListener('keydown', (e) => {
             Object.keys(BLOCK_DATA).forEach(type => {
@@ -262,7 +486,7 @@
             if (e.code === 'KeyD') moveRight = true;
 
             if (e.code === 'Space' && canJump) {
-                velocity.y += 8;
+                velocity.y = 8;
                 canJump = false;
             }
         });
@@ -276,66 +500,50 @@
 
         window.addEventListener('contextmenu', e => e.preventDefault());
 
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
+        // =========================
+        // 루프
+        // =========================
         let prevTime = performance.now();
-
-        const PLAYER_HEIGHT_OFFSET = 2.1;
 
         function animate() {
             requestAnimationFrame(animate);
+
             const time = performance.now();
 
             if (controls.isLocked) {
                 const delta = (time - prevTime) / 1000;
 
+                // 감속
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 9.8 * 2.5 * delta;
+
+                // 중력
+                velocity.y -= 25.0 * delta;
 
                 direction.z = Number(moveForward) - Number(moveBackward);
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize();
 
-                const moveSpeed = 90.0;
+                const moveSpeed = 12.0;
                 if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
                 if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
 
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
+                // 수평 이동
+                const deltaX = -velocity.x * delta;
+                const deltaZ = -velocity.z * delta;
+                tryMoveHorizontal(deltaX, deltaZ);
+
+                // 수직 이동
                 camera.position.y += velocity.y * delta;
 
-                // ===== 수정된 바닥 충돌 감지 =====
-                canJump = false;
+                // 바닥/천장 해결
+                resolveGroundAndCeiling();
 
-                const pX = Math.round(camera.position.x);
-                const pZ = Math.round(camera.position.z);
-
-                // 플레이어 "발 아래 기준 높이"
-                const playerFootReferenceY = camera.position.y - PLAYER_HEIGHT_OFFSET;
-
-                let highestFloorY = -Infinity;
-
-                for (const b of blocks) {
-                    if (Math.round(b.position.x) === pX && Math.round(b.position.z) === pZ) {
-                        // 플레이어 아래에 있는 블록만 바닥 후보로 인정
-                        if (b.position.y <= playerFootReferenceY + 0.01) {
-                            if (b.position.y > highestFloorY) {
-                                highestFloorY = b.position.y;
-                            }
-                        }
-                    }
+                // 너무 아래로 떨어질 경우 복구
+                if (camera.position.y < -30) {
+                    camera.position.set(0, 15, 15);
+                    velocity.set(0, 0, 0);
                 }
-
-                const groundLevel = (highestFloorY === -Infinity ? -20 : highestFloorY + PLAYER_HEIGHT_OFFSET);
-
-                if (camera.position.y <= groundLevel) {
-                    velocity.y = 0;
-                    camera.position.y = groundLevel;
-                    canJump = true;
-                }
-                // ===== 수정 끝 =====
             }
 
             prevTime = time;
