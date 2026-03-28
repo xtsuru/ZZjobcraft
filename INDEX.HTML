@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 마인크래프트 - 블록 설치 및 파괴</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #87ceeb; }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 15px; height: 15px;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #ui {
+            position: absolute; top: 20px; left: 20px;
+            color: white; font-family: 'Malgun Gothic', sans-serif;
+            background: rgba(0,0,0,0.7); padding: 15px;
+            border-radius: 8px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="ui">
+        <b>조작법 업데이트</b><br>
+        - 좌클릭: 블록 파괴<br>
+        - 우클릭: 블록 설치<br>
+        - W,A,S,D: 이동 | SPACE: 점프
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // 1. 기본 설정
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 10, 60);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new PointerLockControls(camera, document.body);
+        document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); });
+
+        // 2. 조명
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dLight.position.set(10, 20, 10);
+        scene.add(dLight);
+
+        // 3. 재질 및 지형 데이터
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        const grassMat = new THREE.MeshLambertMaterial({ color: 0x7cfc00 }); 
+        const dirtMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+        
+        const blocks = []; // 충돌 및 상호작용용 블록 배열
+
+        function createBlock(x, y, z, mat) {
+            const block = new THREE.Mesh(boxGeo, mat);
+            block.position.set(x, y, z);
+            scene.add(block);
+            blocks.push(block);
+        }
+
+        // 초기 맵 생성
+        for (let x = -10; x < 10; x++) {
+            for (let z = -10; z < 10; z++) {
+                createBlock(x, 0, z, grassMat);
+                createBlock(x, -1, z, dirtMat);
+            }
+        }
+
+        // 4. 블록 파괴 및 설치 로직 (Raycaster)
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(0, 0); // 화면 중앙 고정
+
+        window.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(blocks);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                
+                if (e.button === 0) { // 좌클릭: 파괴
+                    scene.remove(intersect.object);
+                    blocks.splice(blocks.indexOf(intersect.object), 1);
+                } 
+                else if (e.button === 2) { // 우클릭: 설치
+                    const pos = intersect.object.position.clone();
+                    // 클릭한 면의 방향(normal)으로 한 칸 이동한 위치에 설치
+                    pos.add(intersect.face.normal); 
+                    createBlock(pos.x, pos.y, pos.z, grassMat);
+                }
+            }
+        });
+
+        // 우클릭 메뉴 방지
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        // 5. 플레이어 물리 및 이동
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+
+        document.addEventListener('keydown', (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': if (canJump) velocity.y += 8; canJump = false; break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        });
+
+        let prevTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            
+            if (controls.isLocked) {
+                const delta = (time - prevTime) / 1000;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 9.8 * 2.2 * delta; 
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                const speed = 80.0;
+                if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                camera.position.y += (velocity.y * delta);
+
+                // 바닥 충돌 감지 (모든 블록 대상)
+                canJump = false;
+                const pX = Math.round(camera.position.x);
+                const pZ = Math.round(camera.position.z);
+                
+                // 현재 내 발밑(y축 아래)에 있는 블록들 중 가장 높은 위치 찾기
+                let highestY = -Infinity;
+                for(let b of blocks) {
+                    if(Math.round(b.position.x) === pX && Math.round(b.position.z) === pZ) {
+                        if(b.position.y > highestY) highestY = b.position.y;
+                    }
+                }
+
+                const groundLevel = (highestY === -Infinity ? -10 : highestY) + 0.5 + 1.6;
+
+                if (camera.position.y <= groundLevel) {
+                    velocity.y = 0;
+                    camera.position.y = groundLevel;
+                    canJump = true;
+                }
+            }
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
