@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Web - Optimized</title>
+  <title>Minecraft Web - Forest + Clouds</title>
   <style>
     * {
       box-sizing: border-box;
@@ -311,7 +311,7 @@
       <div class="title-wrap">
         <div class="title">MINECRAFT</div>
         <div class="subtitle">JAVA EDITION</div>
-        <div class="splash">Tree World!</div>
+        <div class="splash">Forest + Clouds!</div>
       </div>
 
       <div class="menu">
@@ -328,7 +328,7 @@
       </div>
 
       <div class="bottom-left">Minecraft 26.1</div>
-      <div class="bottom-right">Optimized Tree Prototype</div>
+      <div class="bottom-right">Forest Prototype</div>
 
       <div class="panel" id="modal">
         <div class="dialog">
@@ -352,7 +352,7 @@
       <hr style="margin:12px 0; border-color:#444;">
       <div id="perfInfo" style="font-size:12px; color:#9fdcff; line-height:1.5;"></div>
     </div>
-    <div id="pauseHint">ESC: 메인 화면으로 / 클릭: 마우스 고정</div>
+    <div id="pauseHint">ESC: 메인 화면 / 클릭: 마우스 고정</div>
   </div>
 
   <script type="importmap">
@@ -426,20 +426,19 @@
     // ---------------------------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 40, 160);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 190);
 
     const camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      1000
+      1200
     );
 
     const renderer = new THREE.WebGLRenderer({
       antialias: false,
       powerPreference: 'high-performance'
     });
-
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     document.body.appendChild(renderer.domElement);
@@ -452,10 +451,10 @@
       }
     });
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.78));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.82));
 
-    const sun = new THREE.DirectionalLight(0xffffff, 0.7);
-    sun.position.set(50, 80, 30);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.65);
+    sun.position.set(60, 90, 40);
     scene.add(sun);
 
     // ---------------------------
@@ -473,7 +472,13 @@
     const STEP_HEIGHT = 0.6;
     const EPS = 0.001;
 
-    const TREE_CHANCE = 0.045; // 나무 생성 확률(4.5%)
+    // 나무를 훨씬 많이
+    const TREE_CHANCE = 0.11;          // 11%
+    const TREE_MIN_DISTANCE = 3;       // 너무 붙지 않게
+    const CLOUD_Y_MIN = 28;
+    const CLOUD_Y_MAX = 38;
+    const CLOUD_RENDER_RADIUS = 3;
+
     const raycaster = new THREE.Raycaster();
     const dummy = new THREE.Object3D();
 
@@ -496,6 +501,12 @@
     for (const type of BLOCK_TYPES) {
       materials[type] = new THREE.MeshLambertMaterial({ color: BLOCK_DATA[type].color });
     }
+
+    const cloudMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.92
+    });
 
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
@@ -532,7 +543,6 @@
         list.appendChild(div);
       }
     }
-
     updateUI();
 
     // ---------------------------
@@ -540,6 +550,7 @@
     // ---------------------------
     const chunks = new Map();
     const modifiedBlocks = new Map();
+    const cloudChunks = new Map();
 
     let currentChunkX = null;
     let currentChunkZ = null;
@@ -628,7 +639,26 @@
       if (surfaceY < 7) return false;
 
       const r = hash2D(x * 31 + 7, z * 17 + 13);
-      return r < TREE_CHANCE;
+      if (r >= TREE_CHANCE) return false;
+
+      // 최소 간격 검사
+      for (let ox = -TREE_MIN_DISTANCE; ox <= TREE_MIN_DISTANCE; ox++) {
+        for (let oz = -TREE_MIN_DISTANCE; oz <= TREE_MIN_DISTANCE; oz++) {
+          if (ox === 0 && oz === 0) continue;
+
+          const dist = Math.abs(ox) + Math.abs(oz);
+          if (dist > TREE_MIN_DISTANCE) continue;
+
+          const nr = hash2D((x + ox) * 31 + 7, (z + oz) * 17 + 13);
+          if (nr < TREE_CHANCE) {
+            // 자기보다 더 우선순위 높은 나무가 가까이 있으면 제외
+            if (nr < r) return false;
+            if (nr === r && (ox < 0 || (ox === 0 && oz < 0))) return false;
+          }
+        }
+      }
+
+      return true;
     }
 
     function getTerrainBlockType(x, y, z) {
@@ -652,9 +682,8 @@
     }
 
     function getDecorativeBlockType(x, y, z) {
-      // 근처 5x5 범위의 나무를 확인
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -2; oz <= 2; oz++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        for (let oz = -3; oz <= 3; oz++) {
           const tx = x - ox;
           const tz = z - oz;
 
@@ -681,9 +710,7 @@
             const dz = z - tz;
 
             if (Math.abs(dx) <= radius && Math.abs(dz) <= radius) {
-              // 줄기 자리 비우기
               if (!(dx === 0 && dz === 0 && y <= topY)) {
-                // 모서리 일부 제거
                 if (!(Math.abs(dx) === radius && Math.abs(dz) === radius && y !== leafTop)) {
                   return 'leaves';
                 }
@@ -722,6 +749,125 @@
     }
 
     // ---------------------------
+    // Clouds
+    // ---------------------------
+    function createCloudChunk(cx, cz) {
+      return {
+        cx,
+        cz,
+        group: new THREE.Group()
+      };
+    }
+
+    function disposeCloudChunk(chunk) {
+      if (!chunk) return;
+      scene.remove(chunk.group);
+    }
+
+    function addCloudPatch(points, baseX, baseY, baseZ, w, h, d) {
+      for (let x = 0; x < w; x++) {
+        for (let y = 0; y < h; y++) {
+          for (let z = 0; z < d; z++) {
+            points.push({
+              x: baseX + x,
+              y: baseY + y,
+              z: baseZ + z
+            });
+          }
+        }
+      }
+    }
+
+    function buildCloudChunk(cx, cz) {
+      const key = chunkKey(cx, cz);
+      const old = cloudChunks.get(key);
+      if (old) disposeCloudChunk(old);
+
+      const cloudChunk = createCloudChunk(cx, cz);
+      const points = [];
+      const startX = cx * CHUNK_SIZE;
+      const startZ = cz * CHUNK_SIZE;
+
+      // chunk당 0~2개 구름
+      const cloudCountRand = hash2D(cx * 101 + 17, cz * 97 + 43);
+      let cloudCount = 0;
+      if (cloudCountRand < 0.35) cloudCount = 0;
+      else if (cloudCountRand < 0.8) cloudCount = 1;
+      else cloudCount = 2;
+
+      for (let i = 0; i < cloudCount; i++) {
+        const ox = Math.floor(hash2D(cx * 11 + i * 31, cz * 17 + i * 13) * CHUNK_SIZE);
+        const oz = Math.floor(hash2D(cx * 23 + i * 19, cz * 29 + i * 37) * CHUNK_SIZE);
+        const oy = CLOUD_Y_MIN + Math.floor(hash2D(cx * 41 + i * 7, cz * 53 + i * 5) * (CLOUD_Y_MAX - CLOUD_Y_MIN + 1));
+
+        const x = startX + ox;
+        const z = startZ + oz;
+
+        const shape = Math.floor(hash2D(cx * 61 + i * 3, cz * 71 + i * 9) * 3);
+
+        if (shape === 0) {
+          addCloudPatch(points, x, oy, z, 5, 1, 3);
+          addCloudPatch(points, x + 1, oy, z - 1, 3, 1, 5);
+        } else if (shape === 1) {
+          addCloudPatch(points, x, oy, z, 6, 1, 2);
+          addCloudPatch(points, x + 1, oy + 1, z, 3, 1, 2);
+        } else {
+          addCloudPatch(points, x, oy, z, 4, 1, 4);
+          addCloudPatch(points, x + 1, oy + 1, z + 1, 2, 1, 2);
+        }
+      }
+
+      if (points.length > 0) {
+        const mesh = new THREE.InstancedMesh(boxGeo, cloudMaterial, points.length);
+        mesh.frustumCulled = true;
+        mesh.userData.isCloud = true;
+
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          dummy.position.set(p.x, p.y, p.z);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        cloudChunk.group.add(mesh);
+      }
+
+      scene.add(cloudChunk.group);
+      cloudChunks.set(key, cloudChunk);
+    }
+
+    function updateCloudChunks(force = false) {
+      const cx = floorDiv(camera.position.x, CHUNK_SIZE);
+      const cz = floorDiv(camera.position.z, CHUNK_SIZE);
+
+      const needed = new Set();
+
+      for (let dx = -CLOUD_RENDER_RADIUS; dx <= CLOUD_RENDER_RADIUS; dx++) {
+        for (let dz = -CLOUD_RENDER_RADIUS; dz <= CLOUD_RENDER_RADIUS; dz++) {
+          const nx = cx + dx;
+          const nz = cz + dz;
+          const key = chunkKey(nx, nz);
+          needed.add(key);
+
+          if (!cloudChunks.has(key)) {
+            buildCloudChunk(nx, nz);
+          }
+        }
+      }
+
+      for (const key of Array.from(cloudChunks.keys())) {
+        if (!needed.has(key)) {
+          const chunk = cloudChunks.get(key);
+          disposeCloudChunk(chunk);
+          cloudChunks.delete(key);
+        }
+      }
+    }
+
+    // ---------------------------
     // Chunk build
     // ---------------------------
     function createChunk(cx, cz) {
@@ -737,11 +883,6 @@
 
     function disposeChunk(chunk) {
       if (!chunk) return;
-
-      for (const mesh of chunk.meshesByType.values()) {
-        chunk.group.remove(mesh);
-      }
-
       scene.remove(chunk.group);
     }
 
@@ -749,9 +890,7 @@
       const key = chunkKey(cx, cz);
       const oldChunk = chunks.get(key);
 
-      if (oldChunk) {
-        disposeChunk(oldChunk);
-      }
+      if (oldChunk) disposeChunk(oldChunk);
 
       const chunk = createChunk(cx, cz);
       const startX = cx * CHUNK_SIZE;
@@ -779,19 +918,19 @@
       }
 
       for (const type of BLOCK_TYPES) {
-        const blocks = visibleByType.get(type);
-        if (!blocks.length) continue;
+        const list = visibleByType.get(type);
+        if (!list.length) continue;
 
-        const mesh = new THREE.InstancedMesh(boxGeo, materials[type], blocks.length);
+        const mesh = new THREE.InstancedMesh(boxGeo, materials[type], list.length);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.frustumCulled = true;
         mesh.userData.blockType = type;
         mesh.userData.chunkKey = key;
 
-        const meta = new Array(blocks.length);
+        const meta = new Array(list.length);
 
-        for (let i = 0; i < blocks.length; i++) {
-          const b = blocks[i];
+        for (let i = 0; i < list.length; i++) {
+          const b = list[i];
           dummy.position.set(b.x, b.y, b.z);
           dummy.rotation.set(0, 0, 0);
           dummy.scale.set(1, 1, 1);
@@ -866,6 +1005,8 @@
           unloadChunk(ux, uz);
         }
       }
+
+      updateCloudChunks(force);
     }
 
     // ---------------------------
@@ -1090,6 +1231,7 @@
           raycastTargets.push(mesh);
         }
       }
+      // 구름은 넣지 않음 = 충돌/클릭 불가
     }
 
     function updateBlockHighlight() {
@@ -1210,10 +1352,12 @@
     }
 
     function clearWorld() {
-      for (const chunk of chunks.values()) {
-        disposeChunk(chunk);
-      }
+      for (const chunk of chunks.values()) disposeChunk(chunk);
       chunks.clear();
+
+      for (const c of cloudChunks.values()) disposeCloudChunk(c);
+      cloudChunks.clear();
+
       modifiedBlocks.clear();
       refreshRaycastTargets();
       highlight.visible = false;
@@ -1380,7 +1524,8 @@
             로드 청크: ${chunks.size}<br>
             렌더 블록: ${totalVisible.toLocaleString()}<br>
             렌더 거리: ${RENDER_DISTANCE}<br>
-            나무 확률: ${(TREE_CHANCE * 100).toFixed(1)}%
+            나무 확률: ${(TREE_CHANCE * 100).toFixed(0)}%<br>
+            구름 반경: ${CLOUD_RENDER_RADIUS}
           `;
         }
       }
