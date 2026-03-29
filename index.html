@@ -311,7 +311,7 @@
       <div class="title-wrap">
         <div class="title">MINECRAFT</div>
         <div class="subtitle">JAVA EDITION</div>
-        <div class="splash">Optimized World!</div>
+        <div class="splash">Tree World!</div>
       </div>
 
       <div class="menu">
@@ -328,7 +328,7 @@
       </div>
 
       <div class="bottom-left">Minecraft 26.1</div>
-      <div class="bottom-right">Optimized Chunk Prototype</div>
+      <div class="bottom-right">Optimized Tree Prototype</div>
 
       <div class="panel" id="modal">
         <div class="dialog">
@@ -352,7 +352,7 @@
       <hr style="margin:12px 0; border-color:#444;">
       <div id="perfInfo" style="font-size:12px; color:#9fdcff; line-height:1.5;"></div>
     </div>
-    <div id="pauseHint">ESC: 마우스 해제 / 클릭: 다시 고정</div>
+    <div id="pauseHint">ESC: 메인 화면으로 / 클릭: 마우스 고정</div>
   </div>
 
   <script type="importmap">
@@ -406,7 +406,7 @@
     });
 
     document.getElementById('multiBtn').addEventListener('click', () => {
-      openModal('멀티플레이', '이번 버전은 싱글플레이 최적화 테스트용이다.');
+      openModal('멀티플레이', '이번 버전은 싱글플레이 테스트용이다.');
     });
 
     document.getElementById('realmsBtn').addEventListener('click', () => {
@@ -419,12 +419,6 @@
 
     document.getElementById('quitBtn').addEventListener('click', () => {
       openModal('게임 종료', '브라우저에서는 탭을 닫으면 된다.');
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.classList.contains('show')) {
-        closeModal();
-      }
     });
 
     // ---------------------------
@@ -458,8 +452,7 @@
       }
     });
 
-    // Light
-    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.78));
 
     const sun = new THREE.DirectionalLight(0xffffff, 0.7);
     sun.position.set(50, 80, 30);
@@ -469,9 +462,9 @@
     // Config
     // ---------------------------
     const CHUNK_SIZE = 16;
-    const RENDER_DISTANCE = 2;       // 3 -> 2 로 줄여서 확 가벼워짐
+    const RENDER_DISTANCE = 2;
     const WORLD_BOTTOM = -32;
-    const WORLD_TOP_BUFFER = 6;
+    const WORLD_TOP_BUFFER = 8;
 
     const PLAYER_WIDTH = 0.6;
     const PLAYER_HALF = PLAYER_WIDTH / 2;
@@ -480,6 +473,7 @@
     const STEP_HEIGHT = 0.6;
     const EPS = 0.001;
 
+    const TREE_CHANCE = 0.045; // 나무 생성 확률(4.5%)
     const raycaster = new THREE.Raycaster();
     const dummy = new THREE.Object3D();
 
@@ -544,8 +538,8 @@
     // ---------------------------
     // World data
     // ---------------------------
-    const chunks = new Map();          // chunkKey -> chunk object
-    const modifiedBlocks = new Map();  // "x,y,z" -> null or blockType
+    const chunks = new Map();
+    const modifiedBlocks = new Map();
 
     let currentChunkX = null;
     let currentChunkZ = null;
@@ -629,10 +623,12 @@
       return Math.floor(continent + hill + 10);
     }
 
-    function shouldPlaceTreeAt(x, z) {
+    function isTreeBase(x, z) {
       const surfaceY = getTerrainHeight(x, z);
-      if (surfaceY < 8) return false;
-      return hash2D(x * 31 + 7, z * 17 + 13) > 0.985;
+      if (surfaceY < 7) return false;
+
+      const r = hash2D(x * 31 + 7, z * 17 + 13);
+      return r < TREE_CHANCE;
     }
 
     function getTerrainBlockType(x, y, z) {
@@ -656,21 +652,21 @@
     }
 
     function getDecorativeBlockType(x, y, z) {
-      // 주변 나무 검사
+      // 근처 5x5 범위의 나무를 확인
       for (let ox = -2; ox <= 2; ox++) {
         for (let oz = -2; oz <= 2; oz++) {
           const tx = x - ox;
           const tz = z - oz;
 
-          if (!shouldPlaceTreeAt(tx, tz)) continue;
+          if (!isTreeBase(tx, tz)) continue;
 
           const treeBaseY = getTerrainHeight(tx, tz);
-          const trunkHeight = 4 + Math.floor(hash2D(tx * 19, tz * 23) * 2);
+          const trunkHeight = 4 + Math.floor(hash2D(tx * 19, tz * 23) * 3); // 4~6
           const topY = treeBaseY + trunkHeight;
 
           // trunk
           if (x === tx && z === tz) {
-            if (y >= treeBaseY + 1 && y <= treeBaseY + trunkHeight) {
+            if (y >= treeBaseY + 1 && y <= topY) {
               return 'log';
             }
           }
@@ -685,7 +681,9 @@
             const dz = z - tz;
 
             if (Math.abs(dx) <= radius && Math.abs(dz) <= radius) {
+              // 줄기 자리 비우기
               if (!(dx === 0 && dz === 0 && y <= topY)) {
+                // 모서리 일부 제거
                 if (!(Math.abs(dx) === radius && Math.abs(dz) === radius && y !== leafTop)) {
                   return 'leaves';
                 }
@@ -713,7 +711,6 @@
     }
 
     function isBlockVisible(x, y, z) {
-      // 6방향 중 하나라도 공기면 렌더
       return (
         !isSolidBlockAt(x + 1, y, z) ||
         !isSolidBlockAt(x - 1, y, z) ||
@@ -742,7 +739,7 @@
       if (!chunk) return;
 
       for (const mesh of chunk.meshesByType.values()) {
-        mesh.geometry.dispose();
+        chunk.group.remove(mesh);
       }
 
       scene.remove(chunk.group);
@@ -760,7 +757,6 @@
       const startX = cx * CHUNK_SIZE;
       const startZ = cz * CHUNK_SIZE;
 
-      // 1차: visible block 수집
       const visibleByType = new Map();
       for (const type of BLOCK_TYPES) visibleByType.set(type, []);
 
@@ -775,13 +771,13 @@
             const type = getBlockTypeAt(x, y, z);
             if (!type) continue;
             if (!isBlockVisible(x, y, z)) continue;
+
             visibleByType.get(type).push({ x, y, z });
             chunk.visibleCount++;
           }
         }
       }
 
-      // 2차: type별 InstancedMesh 생성
       for (const type of BLOCK_TYPES) {
         const blocks = visibleByType.get(type);
         if (!blocks.length) continue;
@@ -841,8 +837,6 @@
       if (localX === CHUNK_SIZE - 1) rebuildChunk(cx + 1, cz);
       if (localZ === 0) rebuildChunk(cx, cz - 1);
       if (localZ === CHUNK_SIZE - 1) rebuildChunk(cx, cz + 1);
-
-      // 대각선까지는 굳이 안 해도 됨
     }
 
     function updateChunks(force = false) {
@@ -1206,7 +1200,48 @@
     const velocity = new THREE.Vector3(0, 0, 0);
     const movementState = { canJump: false };
 
+    function resetMovementKeys() {
+      moveForward = false;
+      moveBackward = false;
+      moveLeft = false;
+      moveRight = false;
+      velocity.set(0, 0, 0);
+      movementState.canJump = false;
+    }
+
+    function clearWorld() {
+      for (const chunk of chunks.values()) {
+        disposeChunk(chunk);
+      }
+      chunks.clear();
+      modifiedBlocks.clear();
+      refreshRaycastTargets();
+      highlight.visible = false;
+      currentTargetBlock = null;
+      currentChunkX = null;
+      currentChunkZ = null;
+    }
+
+    function returnToLobby() {
+      controls.unlock();
+      resetMovementKeys();
+      clearWorld();
+      gameStarted = false;
+      gameRoot.style.display = 'none';
+      lobby.style.display = 'block';
+    }
+
     document.addEventListener('keydown', (e) => {
+      if (modal.classList.contains('show') && e.key === 'Escape') {
+        closeModal();
+        return;
+      }
+
+      if (gameStarted && e.key === 'Escape') {
+        returnToLobby();
+        return;
+      }
+
       if (!gameStarted) return;
 
       for (const type of BLOCK_TYPES) {
@@ -1344,7 +1379,8 @@
             FPS: ${fpsValue}<br>
             로드 청크: ${chunks.size}<br>
             렌더 블록: ${totalVisible.toLocaleString()}<br>
-            렌더 거리: ${RENDER_DISTANCE}
+            렌더 거리: ${RENDER_DISTANCE}<br>
+            나무 확률: ${(TREE_CHANCE * 100).toFixed(1)}%
           `;
         }
       }
