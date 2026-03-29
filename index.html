@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Web - Working Drag Inventory</title>
+  <title>Minecraft Web - HUD + Hand</title>
   <style>
     * {
       box-sizing: border-box;
@@ -257,6 +257,68 @@
       min-width: 150px;
     }
 
+    /* HUD */
+    #hudWrap {
+      position: absolute;
+      left: 50%;
+      bottom: 92px;
+      transform: translateX(-50%);
+      z-index: 13;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    #hudTop {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 36px;
+      min-width: 360px;
+    }
+
+    .hud-icons {
+      display: flex;
+      gap: 2px;
+      font-size: 22px;
+      line-height: 1;
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    .heart { filter: saturate(1.1); }
+    .meat { filter: saturate(1.05); }
+
+    #xpLevel {
+      color: #8cff4c;
+      font-size: 22px;
+      font-weight: 900;
+      text-shadow:
+        2px 2px 0 #000,
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    #xpBarOuter {
+      width: 360px;
+      height: 12px;
+      background: rgba(0,0,0,0.75);
+      border: 2px solid #1a1a1a;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      position: relative;
+    }
+
+    #xpBarInner {
+      height: 100%;
+      width: 68%;
+      background: linear-gradient(to bottom, #8cff4c 0%, #56d326 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+
     /* HOTBAR */
     #hotbarWrap {
       position: absolute;
@@ -321,6 +383,51 @@
       font-weight: bold;
       text-shadow: 1px 1px 0 #000;
       pointer-events: none;
+    }
+
+    /* HAND */
+    #handWrap {
+      position: absolute;
+      right: 48px;
+      bottom: 34px;
+      width: 180px;
+      height: 180px;
+      z-index: 14;
+      pointer-events: none;
+      transform-origin: 85% 85%;
+    }
+
+    #handWrap.swing {
+      animation: handSwing 0.18s ease-out;
+    }
+
+    .hand-sleeve {
+      position: absolute;
+      right: 52px;
+      bottom: 22px;
+      width: 58px;
+      height: 78px;
+      background: #1fb8c2;
+      border: 3px solid rgba(0,0,0,0.25);
+      transform: rotate(18deg);
+    }
+
+    .hand-skin {
+      position: absolute;
+      right: 20px;
+      bottom: 0;
+      width: 82px;
+      height: 74px;
+      background: #8d5a3b;
+      border: 3px solid rgba(0,0,0,0.25);
+      transform: rotate(18deg);
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,0.04);
+    }
+
+    @keyframes handSwing {
+      0%   { transform: rotate(0deg) translateY(0); }
+      35%  { transform: rotate(24deg) translateY(8px); }
+      100% { transform: rotate(0deg) translateY(0); }
     }
 
     /* INVENTORY SCREEN */
@@ -509,11 +616,11 @@
       .splash { font-size: 18px; right: -70px; top: 28px; }
       .menu { width: calc(100% - 24px); transform: translate(-50%, -36%); }
       .mc-btn { height: 64px; font-size: 22px; }
-
       .inv-panel {
         transform: scale(0.85);
         transform-origin: center;
       }
+      #hudTop, #xpBarOuter { width: 300px; min-width: 300px; }
     }
 
     @media (max-width: 640px) {
@@ -530,7 +637,7 @@
       <div class="title-wrap">
         <div class="title">MINECRAFT</div>
         <div class="subtitle">JAVA EDITION</div>
-        <div class="splash">Working Inventory!</div>
+        <div class="splash">HUD + Hand!</div>
       </div>
 
       <div class="menu">
@@ -546,7 +653,7 @@
       </div>
 
       <div class="bottom-left">Minecraft 26.1</div>
-      <div class="bottom-right">Drag + Split Prototype</div>
+      <div class="bottom-right">HUD Prototype</div>
 
       <div class="panel" id="modal">
         <div class="dialog">
@@ -566,8 +673,24 @@
     <div id="pauseHint">E: 인벤토리 / 1~9: 핫바 / 좌클릭: 전체 이동 / 우클릭: 반 나누기·1개 놓기 / ESC: 닫기 또는 메인 화면</div>
     <div id="perfInfo"></div>
 
+    <div id="hudWrap">
+      <div id="hudTop">
+        <div id="hearts" class="hud-icons"></div>
+        <div id="hunger" class="hud-icons"></div>
+      </div>
+      <div id="xpLevel">7</div>
+      <div id="xpBarOuter">
+        <div id="xpBarInner"></div>
+      </div>
+    </div>
+
     <div id="hotbarWrap">
       <div id="hotbar" class="hotbar"></div>
+    </div>
+
+    <div id="handWrap">
+      <div class="hand-sleeve"></div>
+      <div class="hand-skin"></div>
     </div>
 
     <div id="inventoryScreen">
@@ -620,7 +743,7 @@
 
         <div class="inv-help">
           좌클릭: 전체 스택 집기/옮기기/자리 바꾸기<br>
-          우클릭: 반 나누기 / 1개씩 놓기 / 같은 아이템에 1개 추가
+          우클릭: 반 나누기 / 1개씩 놓기 / 같은 아이템 칸에 1개 추가
         </div>
       </div>
     </div>
@@ -641,9 +764,6 @@
     import * as THREE from 'three';
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-    // ---------------------------
-    // UI / Modal
-    // ---------------------------
     const lobby = document.getElementById('lobby');
     const gameRoot = document.getElementById('gameRoot');
     const modal = document.getElementById('modal');
@@ -658,6 +778,11 @@
     const inventoryHotbarEl = document.getElementById('inventoryHotbar');
     const crosshair = document.getElementById('crosshair');
     const cursorItemEl = document.getElementById('cursorItem');
+    const heartsEl = document.getElementById('hearts');
+    const hungerEl = document.getElementById('hunger');
+    const xpBarInnerEl = document.getElementById('xpBarInner');
+    const xpLevelEl = document.getElementById('xpLevel');
+    const handWrap = document.getElementById('handWrap');
 
     let confirmAction = null;
 
@@ -700,9 +825,6 @@
       openModal('게임 종료', '브라우저에서는 탭을 닫으면 된다.');
     });
 
-    // ---------------------------
-    // Three.js
-    // ---------------------------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
     scene.fog = new THREE.Fog(0x87ceeb, 50, 190);
@@ -736,9 +858,6 @@
     sun.position.set(60, 90, 40);
     scene.add(sun);
 
-    // ---------------------------
-    // Config
-    // ---------------------------
     const CHUNK_SIZE = 16;
     const RENDER_DISTANCE = 2;
     const WORLD_BOTTOM = -32;
@@ -789,9 +908,6 @@
 
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
-    // ---------------------------
-    // Inventory
-    // ---------------------------
     let inventoryOpen = false;
     const HOTBAR_START = 27;
     const hotbarKeys = ['1','2','3','4','5','6','7','8','9'];
@@ -802,9 +918,44 @@
       count: 0
     }));
 
-    let cursorStack = null;     // { type, count }
-    let dragOriginIndex = null; // 슬롯 밖에 놓았을 때 복귀용
+    let cursorStack = null;
+    let dragOriginIndex = null;
     let hoverSlotIndex = null;
+
+    const fakeHud = {
+      hearts: 10,
+      hunger: 10,
+      xp: 0.68,
+      level: 7
+    };
+
+    function renderFunHud() {
+      heartsEl.innerHTML = '';
+      hungerEl.innerHTML = '';
+
+      for (let i = 0; i < 10; i++) {
+        const span = document.createElement('span');
+        span.className = 'heart';
+        span.textContent = i < fakeHud.hearts ? '❤️' : '🖤';
+        heartsEl.appendChild(span);
+      }
+
+      for (let i = 0; i < 10; i++) {
+        const span = document.createElement('span');
+        span.className = 'meat';
+        span.textContent = i < fakeHud.hunger ? '🍖' : '🥩';
+        hungerEl.appendChild(span);
+      }
+
+      xpBarInnerEl.style.width = `${Math.max(0, Math.min(1, fakeHud.xp)) * 100}%`;
+      xpLevelEl.textContent = String(fakeHud.level);
+    }
+
+    function triggerHandSwing() {
+      handWrap.classList.remove('swing');
+      void handWrap.offsetWidth;
+      handWrap.classList.add('swing');
+    }
 
     function makeEmptySlot() {
       return { type: null, count: 0 };
@@ -812,10 +963,6 @@
 
     function cloneStack(stack) {
       return stack ? { type: stack.type, count: stack.count } : null;
-    }
-
-    function isEmptyStack(stack) {
-      return !stack || !stack.type || stack.count <= 0;
     }
 
     function normalizeSlot(index) {
@@ -865,7 +1012,6 @@
 
     function addItemToInventory(type, amount = 1) {
       let left = amount;
-
       while (left > 0) {
         let idx = findStackableSlot(type);
         if (idx === -1) idx = findEmptySlot(true);
@@ -928,7 +1074,7 @@
     }
 
     function updateCursorItemVisual() {
-      if (isEmptyStack(cursorStack)) {
+      if (!cursorStack || !cursorStack.type || cursorStack.count <= 0) {
         cursorItemEl.style.display = 'none';
         cursorItemEl.innerHTML = '';
         return;
@@ -952,7 +1098,6 @@
         const div = document.createElement('div');
         div.className = `slot ${slotIndex === selectedHotbarIndex ? 'selected' : ''} ${!slot.type ? 'empty' : ''} ${hoverSlotIndex === slotIndex ? 'drop-hover' : ''}`;
         div.dataset.slotIndex = String(slotIndex);
-        div.dataset.slotKind = 'slot';
 
         div.innerHTML = `
           <div class="slot-key">${i + 1}</div>
@@ -977,7 +1122,6 @@
       const div = document.createElement('div');
       div.className = `inv-slot ${index === selectedHotbarIndex ? 'active-hotbar' : ''} ${hoverSlotIndex === index ? 'drop-hover' : ''}`;
       div.dataset.slotIndex = String(index);
-      div.dataset.slotKind = 'inv';
 
       div.innerHTML = createItemVisual(slot.type, slot.count);
 
@@ -1012,6 +1156,7 @@
       renderHotbar();
       if (inventoryOpen) renderInventory();
       updateCursorItemVisual();
+      renderFunHud();
     }
 
     function openInventory() {
@@ -1029,7 +1174,6 @@
       crosshair.classList.remove('hidden');
       hoverSlotIndex = null;
 
-      // 인벤토리 닫을 때 손에 들고 있으면 원래 자리로 복귀
       if (cursorStack && dragOriginIndex !== null) {
         const origin = getSlot(dragOriginIndex);
         if (!origin.type) {
@@ -1061,7 +1205,6 @@
     function pickUpWholeStack(index) {
       const slot = getSlot(index);
       if (!slot.type || slot.count <= 0) return;
-
       cursorStack = { type: slot.type, count: slot.count };
       dragOriginIndex = index;
       clearSlot(index);
@@ -1070,7 +1213,6 @@
     function pickUpHalfStack(index) {
       const slot = getSlot(index);
       if (!slot.type || slot.count <= 0) return;
-
       const take = Math.ceil(slot.count / 2);
       const leave = slot.count - take;
 
@@ -1111,11 +1253,8 @@
       setSlot(targetIndex, cursorStack.type, cursorStack.count);
 
       if (originIndex !== null) {
-        if (target && target.type) {
-          setSlot(originIndex, target.type, target.count);
-        } else {
-          clearSlot(originIndex);
-        }
+        if (target && target.type) setSlot(originIndex, target.type, target.count);
+        else clearSlot(originIndex);
       }
 
       cursorStack = null;
@@ -1140,7 +1279,6 @@
           origin.count += add;
           cursorStack.count -= add;
           ensureCursorNormalized();
-
           if (!cursorStack) {
             dragOriginIndex = null;
             return;
@@ -1172,20 +1310,16 @@
 
       if (target.type === cursorStack.type) {
         mergeWholeToSameType(targetIndex);
-        if (cursorStack) {
-          returnCursorToOriginOrInventory();
-        }
+        if (cursorStack) returnCursorToOriginOrInventory();
         return;
       }
 
-      // 다른 아이템이면 자리 교체
       swapWithTarget(targetIndex);
     }
 
     function handleRightClickSlot(index) {
       const slot = getSlot(index);
 
-      // 손이 비어있고 슬롯에 아이템 있으면 반 가져오기
       if (!cursorStack) {
         if (!slot.type || slot.count <= 0) return;
 
@@ -1199,7 +1333,6 @@
         return;
       }
 
-      // 손에 들고 있을 때
       if (!slot.type) {
         setSlot(index, cursorStack.type, 1);
         cursorStack.count -= 1;
@@ -1211,7 +1344,6 @@
         slot.count += 1;
         cursorStack.count -= 1;
         ensureCursorNormalized();
-        return;
       }
     }
 
@@ -1221,7 +1353,6 @@
       e.preventDefault();
       e.stopPropagation();
 
-      selectedHotbarIndex = selectedHotbarIndex; // keep
       const slot = getSlot(index);
 
       if (e.button === 0) {
@@ -1271,15 +1402,9 @@
     });
 
     document.addEventListener('contextmenu', (e) => {
-      // 인벤토리 열려 있을 때 슬롯 우클릭 메뉴 방지
-      if (inventoryOpen) {
-        e.preventDefault();
-      }
+      if (inventoryOpen) e.preventDefault();
     });
 
-    // ---------------------------
-    // World data
-    // ---------------------------
     const chunks = new Map();
     const modifiedBlocks = new Map();
     const cloudChunks = new Map();
@@ -1300,9 +1425,6 @@
       return Math.floor(n / size);
     }
 
-    // ---------------------------
-    // Noise / terrain
-    // ---------------------------
     function hash2D(x, z) {
       let h = x * 374761393 + z * 668265263;
       h = (h ^ (h >> 13)) * 1274126177;
@@ -1474,15 +1596,8 @@
       );
     }
 
-    // ---------------------------
-    // Clouds
-    // ---------------------------
     function createCloudChunk(cx, cz) {
-      return {
-        cx,
-        cz,
-        group: new THREE.Group()
-      };
+      return { cx, cz, group: new THREE.Group() };
     }
 
     function disposeCloudChunk(chunk) {
@@ -1540,8 +1655,6 @@
       if (points.length > 0) {
         const mesh = new THREE.InstancedMesh(boxGeo, cloudMaterial, points.length);
         mesh.frustumCulled = true;
-        mesh.userData.isCloud = true;
-
         for (let i = 0; i < points.length; i++) {
           const p = points[i];
           dummy.position.set(p.x, p.y, p.z);
@@ -1550,7 +1663,6 @@
           dummy.updateMatrix();
           mesh.setMatrixAt(i, dummy.matrix);
         }
-
         mesh.instanceMatrix.needsUpdate = true;
         cloudChunk.group.add(mesh);
       }
@@ -1562,7 +1674,6 @@
     function updateCloudChunks() {
       const cx = floorDiv(camera.position.x, CHUNK_SIZE);
       const cz = floorDiv(camera.position.z, CHUNK_SIZE);
-
       const needed = new Set();
 
       for (let dx = -CLOUD_RENDER_RADIUS; dx <= CLOUD_RENDER_RADIUS; dx++) {
@@ -1584,9 +1695,6 @@
       }
     }
 
-    // ---------------------------
-    // Chunk build
-    // ---------------------------
     function createChunk(cx, cz) {
       return {
         cx,
@@ -1626,7 +1734,6 @@
             const type = getBlockTypeAt(x, y, z);
             if (!type) continue;
             if (!isBlockVisible(x, y, z)) continue;
-
             visibleByType.get(type).push({ x, y, z });
             chunk.visibleCount++;
           }
@@ -1728,9 +1835,6 @@
       updateCloudChunks();
     }
 
-    // ---------------------------
-    // Collision
-    // ---------------------------
     function getFeetY(pos) {
       return pos.y - PLAYER_EYE_HEIGHT;
     }
@@ -1784,7 +1888,6 @@
           for (let z = minZ; z <= maxZ; z++) {
             const type = getBlockTypeAt(x, y, z);
             if (!type) continue;
-
             const bBox = blockBox(x, y, z);
             if (intersects(pBox, bBox)) return true;
           }
@@ -1925,9 +2028,6 @@
       }
     }
 
-    // ---------------------------
-    // Highlight / picking
-    // ---------------------------
     const highlightGeo = new THREE.BoxGeometry(1.03, 1.03, 1.03);
     const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
     const highlight = new THREE.Mesh(highlightGeo, highlightMat);
@@ -1996,6 +2096,7 @@
       rebuildChunkAndNeighborsByBlock(x, z);
       refreshRaycastTargets();
       rerenderInventoryUI();
+      triggerHandSwing();
     }
 
     function placeBlock(x, y, z, type) {
@@ -2006,6 +2107,7 @@
       rebuildChunkAndNeighborsByBlock(x, z);
       refreshRaycastTargets();
       rerenderInventoryUI();
+      triggerHandSwing();
     }
 
     window.addEventListener('mousedown', (e) => {
@@ -2043,15 +2145,6 @@
       }
     });
 
-    window.addEventListener('contextmenu', (e) => {
-      if (!inventoryOpen) {
-        e.preventDefault();
-      }
-    });
-
-    // ---------------------------
-    // Input / Movement
-    // ---------------------------
     let moveForward = false;
     let moveBackward = false;
     let moveLeft = false;
@@ -2144,9 +2237,6 @@
       if (e.code === 'KeyD') moveRight = false;
     });
 
-    // ---------------------------
-    // Start game
-    // ---------------------------
     function startGame() {
       lobby.style.display = 'none';
       gameRoot.style.display = 'block';
@@ -2170,14 +2260,12 @@
 
       closeInventory();
       rerenderInventoryUI();
+      renderFunHud();
       controls.lock();
     }
 
     document.getElementById('singleBtn').addEventListener('click', startGame);
 
-    // ---------------------------
-    // Animate
-    // ---------------------------
     let prevTime = performance.now();
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
@@ -2273,6 +2361,7 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     });
 
+    renderFunHud();
     rerenderInventoryUI();
     animate();
   </script>
