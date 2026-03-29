@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Web - Drag Inventory</title>
+  <title>Minecraft Web - Working Drag Inventory</title>
   <style>
     * {
       box-sizing: border-box;
@@ -309,6 +309,7 @@
       font-size: 14px;
       font-weight: bold;
       text-shadow: 2px 2px 0 #000;
+      pointer-events: none;
     }
 
     .slot-key {
@@ -319,6 +320,7 @@
       font-size: 11px;
       font-weight: bold;
       text-shadow: 1px 1px 0 #000;
+      pointer-events: none;
     }
 
     /* INVENTORY SCREEN */
@@ -347,6 +349,7 @@
       padding: 14px;
       color: #111;
       box-shadow: 0 0 0 4px rgba(0,0,0,0.35);
+      position: relative;
     }
 
     .inv-top {
@@ -381,11 +384,7 @@
       height: 180px;
     }
 
-    .px {
-      position: absolute;
-      image-rendering: pixelated;
-    }
-
+    .px { position: absolute; }
     .head { left: 24px; top: 0; width: 48px; height: 48px; background: #7b4c2e; }
     .hair { left: 24px; top: 0; width: 48px; height: 14px; background: #3e2616; }
     .eye1, .eye2 { width: 8px; height: 8px; background: #66c6ff; top: 20px; }
@@ -428,7 +427,7 @@
     .recipe-btn {
       width: 56px;
       height: 56px;
-      background: #8b8b8b;
+      background: #d8d8d8;
       border-top: 4px solid #dbdbdb;
       border-left: 4px solid #dbdbdb;
       border-right: 4px solid #4e4e4e;
@@ -440,7 +439,6 @@
       align-items: center;
       justify-content: center;
       font-size: 28px;
-      background: #d8d8d8;
     }
 
     .inv-section-title {
@@ -478,10 +476,6 @@
       cursor: pointer;
     }
 
-    .inv-slot:hover {
-      filter: brightness(1.05);
-    }
-
     .inv-slot.active-hotbar {
       outline: 4px solid #ffffff;
       outline-offset: 1px;
@@ -491,26 +485,22 @@
       margin-top: 10px;
       font-size: 13px;
       color: #333;
+      line-height: 1.5;
     }
 
-    #dragGhost {
+    .drop-hover {
+      outline: 3px solid #ffd54a;
+      outline-offset: -2px;
+    }
+
+    #cursorItem {
       position: fixed;
       width: 56px;
       height: 56px;
       pointer-events: none;
       z-index: 9999;
       transform: translate(-50%, -50%);
-    }
-
-    .inv-slot.drag-source,
-    .slot.drag-source {
-      opacity: 0.45;
-    }
-
-    .inv-slot.drop-hover,
-    .slot.drop-hover {
-      outline: 3px solid #ffd54a;
-      outline-offset: -2px;
+      display: none;
     }
 
     @media (max-width: 900px) {
@@ -540,7 +530,7 @@
       <div class="title-wrap">
         <div class="title">MINECRAFT</div>
         <div class="subtitle">JAVA EDITION</div>
-        <div class="splash">Drag Inventory!</div>
+        <div class="splash">Working Inventory!</div>
       </div>
 
       <div class="menu">
@@ -556,7 +546,7 @@
       </div>
 
       <div class="bottom-left">Minecraft 26.1</div>
-      <div class="bottom-right">Drag Inventory Prototype</div>
+      <div class="bottom-right">Drag + Split Prototype</div>
 
       <div class="panel" id="modal">
         <div class="dialog">
@@ -573,7 +563,7 @@
 
   <div id="gameRoot">
     <div id="crosshair"></div>
-    <div id="pauseHint">E: 인벤토리 / 1~9: 핫바 / ESC: 닫기 또는 메인 화면</div>
+    <div id="pauseHint">E: 인벤토리 / 1~9: 핫바 / 좌클릭: 전체 이동 / 우클릭: 반 나누기·1개 놓기 / ESC: 닫기 또는 메인 화면</div>
     <div id="perfInfo"></div>
 
     <div id="hotbarWrap">
@@ -629,11 +619,14 @@
         <div id="inventoryHotbar" class="inventory-grid inv-bottom"></div>
 
         <div class="inv-help">
-          아이템을 드래그해서 빈칸으로 이동하거나 다른 아이템과 자리를 바꿀 수 있음.
+          좌클릭: 전체 스택 집기/옮기기/자리 바꾸기<br>
+          우클릭: 반 나누기 / 1개씩 놓기 / 같은 아이템에 1개 추가
         </div>
       </div>
     </div>
   </div>
+
+  <div id="cursorItem"></div>
 
   <script type="importmap">
   {
@@ -664,6 +657,7 @@
     const inventoryMainEl = document.getElementById('inventoryMain');
     const inventoryHotbarEl = document.getElementById('inventoryHotbar');
     const crosshair = document.getElementById('crosshair');
+    const cursorItemEl = document.getElementById('cursorItem');
 
     let confirmAction = null;
 
@@ -756,6 +750,7 @@
     const PLAYER_EYE_HEIGHT = 1.62;
     const STEP_HEIGHT = 0.6;
     const EPS = 0.001;
+    const MAX_STACK = 64;
 
     const TREE_CHANCE = 0.11;
     const TREE_MIN_DISTANCE = 3;
@@ -795,67 +790,136 @@
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
     // ---------------------------
-    // Inventory data
+    // Inventory
     // ---------------------------
     let inventoryOpen = false;
-    const inventoryCounts = {};
-    for (const type of BLOCK_TYPES) inventoryCounts[type] = 20;
-
-    const inventorySlots = new Array(36).fill(null).map(() => ({ type: null }));
-    const hotbarKeys = ['1','2','3','4','5','6','7','8','9'];
     const HOTBAR_START = 27;
+    const hotbarKeys = ['1','2','3','4','5','6','7','8','9'];
     let selectedHotbarIndex = HOTBAR_START;
 
-    let draggedSlotIndex = null;
-    let dragGhostEl = null;
-    let dragHoveredIndex = null;
+    const inventorySlots = new Array(36).fill(null).map(() => ({
+      type: null,
+      count: 0
+    }));
 
-    function seedInventory() {
-      inventorySlots[0].type = 'deepslate';
-      inventorySlots[1].type = 'coal';
-      inventorySlots[2].type = 'iron';
-      inventorySlots[3].type = 'diamond';
+    let cursorStack = null;     // { type, count }
+    let dragOriginIndex = null; // 슬롯 밖에 놓았을 때 복귀용
+    let hoverSlotIndex = null;
 
-      inventorySlots[27].type = 'grass';
-      inventorySlots[28].type = 'dirt';
-      inventorySlots[29].type = 'stone';
-      inventorySlots[30].type = 'sand';
-      inventorySlots[31].type = 'log';
-      inventorySlots[32].type = 'leaves';
-      inventorySlots[33].type = 'coal';
-      inventorySlots[34].type = 'iron';
-      inventorySlots[35].type = 'diamond';
+    function makeEmptySlot() {
+      return { type: null, count: 0 };
     }
-    seedInventory();
 
-    function ensureItemHasSlot(type) {
-      const existing = inventorySlots.findIndex(s => s.type === type);
-      if (existing !== -1) return existing;
+    function cloneStack(stack) {
+      return stack ? { type: stack.type, count: stack.count } : null;
+    }
 
-      const emptyMain = inventorySlots.slice(0, 27).findIndex(s => s.type === null);
-      if (emptyMain !== -1) {
-        inventorySlots[emptyMain].type = type;
-        return emptyMain;
+    function isEmptyStack(stack) {
+      return !stack || !stack.type || stack.count <= 0;
+    }
+
+    function normalizeSlot(index) {
+      const slot = inventorySlots[index];
+      if (!slot.type || slot.count <= 0) {
+        slot.type = null;
+        slot.count = 0;
       }
+    }
 
-      const emptyAny = inventorySlots.findIndex(s => s.type === null);
-      if (emptyAny !== -1) {
-        inventorySlots[emptyAny].type = type;
-        return emptyAny;
+    function setSlot(index, type, count) {
+      inventorySlots[index].type = type;
+      inventorySlots[index].count = count;
+      normalizeSlot(index);
+    }
+
+    function clearSlot(index) {
+      inventorySlots[index].type = null;
+      inventorySlots[index].count = 0;
+    }
+
+    function getSlot(index) {
+      return inventorySlots[index];
+    }
+
+    function ensureCursorNormalized() {
+      if (cursorStack && cursorStack.count <= 0) {
+        cursorStack = null;
       }
+    }
 
+    function findStackableSlot(type) {
+      return inventorySlots.findIndex(s => s.type === type && s.count < MAX_STACK);
+    }
+
+    function findEmptySlot(preferMain = true) {
+      if (preferMain) {
+        for (let i = 0; i < 27; i++) {
+          if (!inventorySlots[i].type) return i;
+        }
+      }
+      for (let i = 0; i < 36; i++) {
+        if (!inventorySlots[i].type) return i;
+      }
       return -1;
     }
 
+    function addItemToInventory(type, amount = 1) {
+      let left = amount;
+
+      while (left > 0) {
+        let idx = findStackableSlot(type);
+        if (idx === -1) idx = findEmptySlot(true);
+        if (idx === -1) return;
+
+        const slot = inventorySlots[idx];
+        if (!slot.type) {
+          const add = Math.min(MAX_STACK, left);
+          setSlot(idx, type, add);
+          left -= add;
+        } else {
+          const space = MAX_STACK - slot.count;
+          const add = Math.min(space, left);
+          slot.count += add;
+          left -= add;
+          normalizeSlot(idx);
+        }
+      }
+    }
+
+    function removeOneFromSelectedHotbar() {
+      const slot = getSlot(selectedHotbarIndex);
+      if (!slot.type || slot.count <= 0) return false;
+      slot.count -= 1;
+      normalizeSlot(selectedHotbarIndex);
+      return true;
+    }
+
     function getSelectedBlockType() {
-      const slot = inventorySlots[selectedHotbarIndex];
-      if (!slot || !slot.type) return null;
-      if ((inventoryCounts[slot.type] || 0) <= 0) return null;
+      const slot = getSlot(selectedHotbarIndex);
+      if (!slot.type || slot.count <= 0) return null;
       return slot.type;
     }
 
+    function seedInventory() {
+      setSlot(0,  'deepslate', 32);
+      setSlot(1,  'coal', 16);
+      setSlot(2,  'iron', 12);
+      setSlot(3,  'diamond', 8);
+
+      setSlot(27, 'grass', 64);
+      setSlot(28, 'dirt', 64);
+      setSlot(29, 'stone', 64);
+      setSlot(30, 'sand', 64);
+      setSlot(31, 'log', 32);
+      setSlot(32, 'leaves', 32);
+      setSlot(33, 'coal', 16);
+      setSlot(34, 'iron', 12);
+      setSlot(35, 'diamond', 8);
+    }
+    seedInventory();
+
     function createItemVisual(type, count) {
-      if (!type) return '';
+      if (!type || count <= 0) return '';
       const colorHex = '#' + BLOCK_DATA[type].color.toString(16).padStart(6, '0');
       return `
         <div class="slot-item" style="background:${colorHex};"></div>
@@ -863,178 +927,63 @@
       `;
     }
 
-    function makeSlotInnerHTML(type) {
-      if (!type) return '';
-      const count = inventoryCounts[type] || 0;
-      if (count <= 0) return '';
-      return createItemVisual(type, count);
-    }
-
-    function getSlotType(index) {
-      return inventorySlots[index]?.type || null;
-    }
-
-    function setSlotType(index, type) {
-      inventorySlots[index].type = type;
-    }
-
-    function swapSlotTypes(a, b) {
-      const temp = inventorySlots[a].type;
-      inventorySlots[a].type = inventorySlots[b].type;
-      inventorySlots[b].type = temp;
-    }
-
-    function moveSlotType(from, to) {
-      inventorySlots[to].type = inventorySlots[from].type;
-      inventorySlots[from].type = null;
-    }
-
-    function updateDragGhostPosition(x, y) {
-      if (!dragGhostEl) return;
-      dragGhostEl.style.left = `${x}px`;
-      dragGhostEl.style.top = `${y}px`;
-    }
-
-    function clearDragState() {
-      draggedSlotIndex = null;
-      dragHoveredIndex = null;
-      if (dragGhostEl) {
-        dragGhostEl.remove();
-        dragGhostEl = null;
-      }
-    }
-
-    function beginDrag(slotIndex, event) {
-      const type = getSlotType(slotIndex);
-      if (!type) return;
-      if ((inventoryCounts[type] || 0) <= 0) return;
-
-      draggedSlotIndex = slotIndex;
-
-      if (dragGhostEl) dragGhostEl.remove();
-      dragGhostEl = document.createElement('div');
-      dragGhostEl.id = 'dragGhost';
-      dragGhostEl.innerHTML = makeSlotInnerHTML(type);
-      document.body.appendChild(dragGhostEl);
-
-      updateDragGhostPosition(event.clientX, event.clientY);
-      renderHotbar();
-      renderInventory();
-    }
-
-    function dropOnSlot(targetIndex) {
-      if (draggedSlotIndex === null) return;
-
-      if (targetIndex === null || targetIndex === undefined) {
-        clearDragState();
-        renderHotbar();
-        renderInventory();
+    function updateCursorItemVisual() {
+      if (isEmptyStack(cursorStack)) {
+        cursorItemEl.style.display = 'none';
+        cursorItemEl.innerHTML = '';
         return;
       }
-
-      if (draggedSlotIndex === targetIndex) {
-        clearDragState();
-        renderHotbar();
-        renderInventory();
-        return;
-      }
-
-      const fromType = getSlotType(draggedSlotIndex);
-      const toType = getSlotType(targetIndex);
-
-      if (!fromType) {
-        clearDragState();
-        renderHotbar();
-        renderInventory();
-        return;
-      }
-
-      if (!toType) {
-        moveSlotType(draggedSlotIndex, targetIndex);
-      } else {
-        swapSlotTypes(draggedSlotIndex, targetIndex);
-      }
-
-      clearDragState();
-      renderHotbar();
-      renderInventory();
+      cursorItemEl.style.display = 'block';
+      cursorItemEl.innerHTML = createItemVisual(cursorStack.type, cursorStack.count);
     }
 
-    document.addEventListener('mousemove', (e) => {
-      updateDragGhostPosition(e.clientX, e.clientY);
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (draggedSlotIndex !== null && dragHoveredIndex === null) {
-        clearDragState();
-        renderHotbar();
-        renderInventory();
-      }
-    });
+    function moveCursorVisual(x, y) {
+      cursorItemEl.style.left = `${x}px`;
+      cursorItemEl.style.top = `${y}px`;
+    }
 
     function renderHotbar() {
       hotbarEl.innerHTML = '';
 
       for (let i = 0; i < 9; i++) {
         const slotIndex = HOTBAR_START + i;
-        const type = getSlotType(slotIndex);
-        const count = type ? (inventoryCounts[type] || 0) : 0;
+        const slot = getSlot(slotIndex);
 
         const div = document.createElement('div');
-        div.className = `slot ${slotIndex === selectedHotbarIndex ? 'selected' : ''} ${type ? '' : 'empty'} ${draggedSlotIndex === slotIndex ? 'drag-source' : ''} ${dragHoveredIndex === slotIndex ? 'drop-hover' : ''}`;
+        div.className = `slot ${slotIndex === selectedHotbarIndex ? 'selected' : ''} ${!slot.type ? 'empty' : ''} ${hoverSlotIndex === slotIndex ? 'drop-hover' : ''}`;
+        div.dataset.slotIndex = String(slotIndex);
+        div.dataset.slotKind = 'slot';
+
         div.innerHTML = `
           <div class="slot-key">${i + 1}</div>
-          ${type && count > 0 ? createItemVisual(type, count) : ''}
+          ${createItemVisual(slot.type, slot.count)}
         `;
 
-        div.addEventListener('click', () => {
-          if (draggedSlotIndex !== null) return;
+        div.addEventListener('click', (e) => {
+          if (cursorStack) return;
+          if (e.button !== 0) return;
           selectedHotbarIndex = slotIndex;
           renderHotbar();
           if (inventoryOpen) renderInventory();
         });
 
-        div.addEventListener('mousedown', (e) => {
-          if (e.button !== 0) return;
-          beginDrag(slotIndex, e);
-        });
-
-        div.addEventListener('mouseenter', () => {
-          if (draggedSlotIndex !== null) {
-            dragHoveredIndex = slotIndex;
-            renderHotbar();
-            if (inventoryOpen) renderInventory();
-          }
-        });
-
-        div.addEventListener('mouseleave', () => {
-          if (dragHoveredIndex === slotIndex) {
-            dragHoveredIndex = null;
-            renderHotbar();
-            if (inventoryOpen) renderInventory();
-          }
-        });
-
-        div.addEventListener('mouseup', () => {
-          if (draggedSlotIndex !== null) {
-            dropOnSlot(slotIndex);
-          }
-        });
-
+        div.addEventListener('mousedown', (e) => handleSlotMouseDown(e, slotIndex));
         hotbarEl.appendChild(div);
       }
     }
 
     function createInventorySlot(index, isHotbar = false) {
-      const type = getSlotType(index);
-      const count = type ? (inventoryCounts[type] || 0) : 0;
-
+      const slot = getSlot(index);
       const div = document.createElement('div');
-      div.className = `inv-slot ${index === selectedHotbarIndex ? 'active-hotbar' : ''} ${draggedSlotIndex === index ? 'drag-source' : ''} ${dragHoveredIndex === index ? 'drop-hover' : ''}`;
-      div.innerHTML = type && count > 0 ? createItemVisual(type, count) : '';
+      div.className = `inv-slot ${index === selectedHotbarIndex ? 'active-hotbar' : ''} ${hoverSlotIndex === index ? 'drop-hover' : ''}`;
+      div.dataset.slotIndex = String(index);
+      div.dataset.slotKind = 'inv';
 
-      div.addEventListener('click', () => {
-        if (draggedSlotIndex !== null) return;
+      div.innerHTML = createItemVisual(slot.type, slot.count);
+
+      div.addEventListener('click', (e) => {
+        if (cursorStack) return;
+        if (e.button !== 0) return;
         if (isHotbar) {
           selectedHotbarIndex = index;
           renderHotbar();
@@ -1042,33 +991,7 @@
         }
       });
 
-      div.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        beginDrag(index, e);
-      });
-
-      div.addEventListener('mouseenter', () => {
-        if (draggedSlotIndex !== null) {
-          dragHoveredIndex = index;
-          renderHotbar();
-          renderInventory();
-        }
-      });
-
-      div.addEventListener('mouseleave', () => {
-        if (dragHoveredIndex === index) {
-          dragHoveredIndex = null;
-          renderHotbar();
-          renderInventory();
-        }
-      });
-
-      div.addEventListener('mouseup', () => {
-        if (draggedSlotIndex !== null) {
-          dropOnSlot(index);
-        }
-      });
-
+      div.addEventListener('mousedown', (e) => handleSlotMouseDown(e, index));
       return div;
     }
 
@@ -1077,12 +1000,18 @@
       inventoryHotbarEl.innerHTML = '';
 
       for (let i = 0; i < 27; i++) {
-        inventoryMainEl.appendChild(createInventorySlot(i));
+        inventoryMainEl.appendChild(createInventorySlot(i, false));
       }
 
       for (let i = 27; i < 36; i++) {
         inventoryHotbarEl.appendChild(createInventorySlot(i, true));
       }
+    }
+
+    function rerenderInventoryUI() {
+      renderHotbar();
+      if (inventoryOpen) renderInventory();
+      updateCursorItemVisual();
     }
 
     function openInventory() {
@@ -1098,8 +1027,29 @@
       inventoryOpen = false;
       inventoryScreen.classList.remove('show');
       crosshair.classList.remove('hidden');
-      clearDragState();
-      renderHotbar();
+      hoverSlotIndex = null;
+
+      // 인벤토리 닫을 때 손에 들고 있으면 원래 자리로 복귀
+      if (cursorStack && dragOriginIndex !== null) {
+        const origin = getSlot(dragOriginIndex);
+        if (!origin.type) {
+          setSlot(dragOriginIndex, cursorStack.type, cursorStack.count);
+          cursorStack = null;
+        } else if (origin.type === cursorStack.type && origin.count < MAX_STACK) {
+          const add = Math.min(MAX_STACK - origin.count, cursorStack.count);
+          origin.count += add;
+          cursorStack.count -= add;
+          ensureCursorNormalized();
+        }
+      }
+
+      if (cursorStack) {
+        addItemToInventory(cursorStack.type, cursorStack.count);
+        cursorStack = null;
+      }
+
+      dragOriginIndex = null;
+      rerenderInventoryUI();
     }
 
     function toggleInventory() {
@@ -1108,23 +1058,224 @@
       else openInventory();
     }
 
-    inventoryScreen.addEventListener('mouseup', (e) => {
-      if (draggedSlotIndex === null) return;
-      const slotEl = e.target.closest('.inv-slot');
-      if (!slotEl) {
-        dropOnSlot(null);
+    function pickUpWholeStack(index) {
+      const slot = getSlot(index);
+      if (!slot.type || slot.count <= 0) return;
+
+      cursorStack = { type: slot.type, count: slot.count };
+      dragOriginIndex = index;
+      clearSlot(index);
+    }
+
+    function pickUpHalfStack(index) {
+      const slot = getSlot(index);
+      if (!slot.type || slot.count <= 0) return;
+
+      const take = Math.ceil(slot.count / 2);
+      const leave = slot.count - take;
+
+      cursorStack = { type: slot.type, count: take };
+      dragOriginIndex = index;
+
+      if (leave <= 0) clearSlot(index);
+      else setSlot(index, slot.type, leave);
+    }
+
+    function placeWholeToEmpty(targetIndex) {
+      if (!cursorStack) return;
+      setSlot(targetIndex, cursorStack.type, cursorStack.count);
+      cursorStack = null;
+      dragOriginIndex = null;
+    }
+
+    function mergeWholeToSameType(targetIndex) {
+      const slot = getSlot(targetIndex);
+      if (!cursorStack || slot.type !== cursorStack.type) return false;
+
+      const space = MAX_STACK - slot.count;
+      if (space <= 0) return false;
+
+      const add = Math.min(space, cursorStack.count);
+      slot.count += add;
+      cursorStack.count -= add;
+      ensureCursorNormalized();
+
+      if (!cursorStack) dragOriginIndex = null;
+      return true;
+    }
+
+    function swapWithTarget(targetIndex) {
+      const target = cloneStack(getSlot(targetIndex));
+      const originIndex = dragOriginIndex;
+
+      setSlot(targetIndex, cursorStack.type, cursorStack.count);
+
+      if (originIndex !== null) {
+        if (target && target.type) {
+          setSlot(originIndex, target.type, target.count);
+        } else {
+          clearSlot(originIndex);
+        }
+      }
+
+      cursorStack = null;
+      dragOriginIndex = null;
+    }
+
+    function returnCursorToOriginOrInventory() {
+      if (!cursorStack) return;
+
+      if (dragOriginIndex !== null) {
+        const origin = getSlot(dragOriginIndex);
+
+        if (!origin.type) {
+          setSlot(dragOriginIndex, cursorStack.type, cursorStack.count);
+          cursorStack = null;
+          dragOriginIndex = null;
+          return;
+        }
+
+        if (origin.type === cursorStack.type && origin.count < MAX_STACK) {
+          const add = Math.min(MAX_STACK - origin.count, cursorStack.count);
+          origin.count += add;
+          cursorStack.count -= add;
+          ensureCursorNormalized();
+
+          if (!cursorStack) {
+            dragOriginIndex = null;
+            return;
+          }
+        }
+      }
+
+      if (cursorStack) {
+        addItemToInventory(cursorStack.type, cursorStack.count);
+        cursorStack = null;
+        dragOriginIndex = null;
+      }
+    }
+
+    function handleLeftDrop(targetIndex) {
+      if (!cursorStack) return;
+
+      if (targetIndex === null) {
+        returnCursorToOriginOrInventory();
+        return;
+      }
+
+      const target = getSlot(targetIndex);
+
+      if (!target.type) {
+        placeWholeToEmpty(targetIndex);
+        return;
+      }
+
+      if (target.type === cursorStack.type) {
+        mergeWholeToSameType(targetIndex);
+        if (cursorStack) {
+          returnCursorToOriginOrInventory();
+        }
+        return;
+      }
+
+      // 다른 아이템이면 자리 교체
+      swapWithTarget(targetIndex);
+    }
+
+    function handleRightClickSlot(index) {
+      const slot = getSlot(index);
+
+      // 손이 비어있고 슬롯에 아이템 있으면 반 가져오기
+      if (!cursorStack) {
+        if (!slot.type || slot.count <= 0) return;
+
+        if (slot.count === 1) {
+          cursorStack = { type: slot.type, count: 1 };
+          dragOriginIndex = index;
+          clearSlot(index);
+        } else {
+          pickUpHalfStack(index);
+        }
+        return;
+      }
+
+      // 손에 들고 있을 때
+      if (!slot.type) {
+        setSlot(index, cursorStack.type, 1);
+        cursorStack.count -= 1;
+        ensureCursorNormalized();
+        return;
+      }
+
+      if (slot.type === cursorStack.type && slot.count < MAX_STACK) {
+        slot.count += 1;
+        cursorStack.count -= 1;
+        ensureCursorNormalized();
+        return;
+      }
+    }
+
+    function handleSlotMouseDown(e, index) {
+      if (!inventoryOpen) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      selectedHotbarIndex = selectedHotbarIndex; // keep
+      const slot = getSlot(index);
+
+      if (e.button === 0) {
+        if (!cursorStack) {
+          if (!slot.type) return;
+          pickUpWholeStack(index);
+        }
+      } else if (e.button === 2) {
+        handleRightClickSlot(index);
+      }
+
+      rerenderInventoryUI();
+      moveCursorVisual(e.clientX, e.clientY);
+    }
+
+    function getSlotIndexFromPoint(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      const slotEl = el.closest('[data-slot-index]');
+      if (!slotEl) return null;
+      const idx = Number(slotEl.dataset.slotIndex);
+      return Number.isFinite(idx) ? idx : null;
+    }
+
+    document.addEventListener('mousemove', (e) => {
+      moveCursorVisual(e.clientX, e.clientY);
+
+      if (inventoryOpen) {
+        const idx = getSlotIndexFromPoint(e.clientX, e.clientY);
+        if (hoverSlotIndex !== idx) {
+          hoverSlotIndex = idx;
+          rerenderInventoryUI();
+        }
       }
     });
 
-    hotbarEl.addEventListener('mouseup', (e) => {
-      if (draggedSlotIndex === null) return;
-      const slotEl = e.target.closest('.slot');
-      if (!slotEl) {
-        dropOnSlot(null);
+    document.addEventListener('mouseup', (e) => {
+      if (!inventoryOpen) return;
+
+      const targetIndex = getSlotIndexFromPoint(e.clientX, e.clientY);
+
+      if (e.button === 0 && cursorStack) {
+        handleLeftDrop(targetIndex);
+        hoverSlotIndex = null;
+        rerenderInventoryUI();
       }
     });
 
-    renderHotbar();
+    document.addEventListener('contextmenu', (e) => {
+      // 인벤토리 열려 있을 때 슬롯 우클릭 메뉴 방지
+      if (inventoryOpen) {
+        e.preventDefault();
+      }
+    });
 
     // ---------------------------
     // World data
@@ -1839,34 +1990,22 @@
       };
     }
 
-    function addItem(type, amount = 1) {
-      inventoryCounts[type] = (inventoryCounts[type] || 0) + amount;
-      ensureItemHasSlot(type);
-      renderHotbar();
-      if (inventoryOpen) renderInventory();
-    }
-
-    function removeItem(type, amount = 1) {
-      inventoryCounts[type] = Math.max(0, (inventoryCounts[type] || 0) - amount);
-      renderHotbar();
-      if (inventoryOpen) renderInventory();
-    }
-
     function breakBlockAt(x, y, z, type) {
       modifiedBlocks.set(blockKey(x, y, z), null);
-      addItem(type, 1);
+      addItemToInventory(type, 1);
       rebuildChunkAndNeighborsByBlock(x, z);
       refreshRaycastTargets();
+      rerenderInventoryUI();
     }
 
     function placeBlock(x, y, z, type) {
       if (isSolidBlockAt(x, y, z)) return;
-      if ((inventoryCounts[type] || 0) <= 0) return;
+      if (!removeOneFromSelectedHotbar()) return;
 
       modifiedBlocks.set(blockKey(x, y, z), type);
-      removeItem(type, 1);
       rebuildChunkAndNeighborsByBlock(x, z);
       refreshRaycastTargets();
+      rerenderInventoryUI();
     }
 
     window.addEventListener('mousedown', (e) => {
@@ -1904,7 +2043,11 @@
       }
     });
 
-    window.addEventListener('contextmenu', e => e.preventDefault());
+    window.addEventListener('contextmenu', (e) => {
+      if (!inventoryOpen) {
+        e.preventDefault();
+      }
+    });
 
     // ---------------------------
     // Input / Movement
@@ -1944,7 +2087,6 @@
     function returnToLobby() {
       controls.unlock();
       closeInventory();
-      clearDragState();
       resetMovementKeys();
       clearWorld();
       gameStarted = false;
@@ -1977,8 +2119,7 @@
       const hotbarIndex = hotbarKeys.indexOf(e.key);
       if (hotbarIndex !== -1) {
         selectedHotbarIndex = HOTBAR_START + hotbarIndex;
-        renderHotbar();
-        if (inventoryOpen) renderInventory();
+        rerenderInventoryUI();
         return;
       }
 
@@ -2027,8 +2168,8 @@
         setFeetY(camera.position, floorY + 0.01);
       }
 
-      renderHotbar();
       closeInventory();
+      rerenderInventoryUI();
       controls.lock();
     }
 
@@ -2111,7 +2252,6 @@
           for (const c of chunks.values()) totalVisible += c.visibleCount;
 
           const selectedType = getSelectedBlockType();
-
           perfInfo.innerHTML = `
             FPS: ${fpsValue}<br>
             로드 청크: ${chunks.size}<br>
@@ -2133,6 +2273,7 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     });
 
+    rerenderInventoryUI();
     animate();
   </script>
 </body>
